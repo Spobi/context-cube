@@ -1,4 +1,5 @@
-import { loadCube } from "../core/cube";
+import { getRow, loadCube } from "../core/cube";
+import { TOOL_COMMAND } from "../core/paths";
 import { bulkUpdateHeaders, createBox } from "../core/ops";
 import { splitGenerated } from "../core/format/generated";
 import { slugify } from "../core/format/names";
@@ -29,11 +30,23 @@ export function ruleRewrites(root: string, homes: SourceHome[]): RuleRewrite[] {
     if (b.header?.scope?.startsWith("superseded")) continue;
     const text = splitGenerated(b.doc?.body ?? "").own;
     let next = text;
+    const types = new Set<string>();
     for (const h of homes) {
       if (isAgentFile(h.path)) continue;
       const base = h.path.split("/").pop()!;
-      const re = new RegExp(`\`?(?:[\\w./-]*/)?${esc(base)}\`?(\\s*\\((?:repo root|this folder|root)\\))?`, "g");
-      next = next.replace(re, `the cube's ${h.rowName} row (${h.rowId})`);
+      // "**Read `HISTORY.md`** (repo root)": keep the emphasis, drop where the file was.
+      const re = new RegExp(`\`?(?:[\\w./-]*/)?${esc(base)}\`?(\\*\\*|\\*|__|_)?(?:\\s*\\((?:repo root|this folder|root)\\))?`, "g");
+      const before = next;
+      next = next.replace(re, (_m, em?: string) => `the cube's ${h.rowName} row (${h.rowId})${em ?? ""}`);
+      if (next !== before) types.add(getRow(cube, h.rowId)?.type ?? "");
+    }
+    // A rule to update a file now means a cube command: say which.
+    if (next !== text && /\b(update|add|append|write|record|log|document)\b/i.test(text)) {
+      const how = [
+        types.has("history") ? `history with \`${TOOL_COMMAND} history add "<what changed>"\`` : "",
+        types.has("invariants") ? `invariants with \`${TOOL_COMMAND} propose new\` or \`propose edit\` (a person approves)` : "",
+      ].filter(Boolean);
+      if (how.length) next = `${next.replace(/\s+$/, "")} (In the cube: add ${how.join("; ")}.)\n`;
     }
     if (next !== text) out.push({ box: b.id, oldText: text, newText: next });
   }

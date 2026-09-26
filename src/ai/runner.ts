@@ -58,7 +58,7 @@ export class StepFailed extends Error {
  */
 export class UsageLimitError extends Error {}
 
-export const LIMIT_RE = /usage limit|limit reached|rate[ _-]?limit|too many requests|\b429\b|overloaded|resets? (at|in)\b/i;
+export const LIMIT_RE = /usage limit|limit reached|hit your (?:\w+ )?limit|rate[ _-]?limit|too many requests|\b429\b|overloaded|resets? (?:(?:at|in)\b|\d)/i;
 
 export interface AICallLog {
   t: string;
@@ -206,14 +206,17 @@ function writeLog(root: string, log: AICallLog): void {
   }
 }
 
-/** Runs `fn` over items with at most `limit` in flight (plan 4.2: default 4). */
+/**
+ * Runs `fn` over items with at most `limit` in flight (plan 4.2: default 4).
+ * After one failure (say, a usage limit) it starts nothing new, lets the calls
+ * in flight finish so their work is saved, then throws the first error.
+ */
 export async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;
   let failed = false;
   const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
     for (;;) {
-      // After one failure (say, a usage limit), start nothing new.
       if (failed) return;
       const i = next++;
       if (i >= items.length) return;
@@ -225,6 +228,8 @@ export async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T, in
       }
     }
   });
-  await Promise.all(workers);
+  const settled = await Promise.allSettled(workers);
+  const first = settled.find((r) => r.status === "rejected");
+  if (first) throw (first as PromiseRejectedResult).reason;
   return out;
 }

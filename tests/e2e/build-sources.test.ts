@@ -87,7 +87,7 @@ describe("sources, recipe, split, and coverage on the fixture projects", () => {
   it("asks before spending usage, and stops if the person says no", async () => {
     const root = tempProject(fx.noGit, { git: false });
     const log: string[] = [];
-    const out = await build({ cwd: root, ask: scriptedAsker({ "Go ahead?": false }, log), backend: recordedBackend() });
+    const out = await build({ cwd: root, ask: scriptedAsker({ "Go ahead?": "no" }, log), backend: recordedBackend() });
     expect(out.join("\n")).toMatch(/Stopped before using any AI/);
     expect(log.findIndex((l) => l.includes("Go ahead?"))).toBeGreaterThan(log.findIndex((l) => l.includes("roughly")));
     // Only the classification ran (it's needed for the estimate); no recipe was written.

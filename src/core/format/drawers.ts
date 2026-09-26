@@ -30,10 +30,10 @@ export const DRAWER_FILE_RE = /^Z(\d)-[a-z]+\.md$/;
 export const ROW_TYPES = ["rules", "history", "invariants", "feature", "system", "catalog", "custom"] as const;
 export type RowType = (typeof ROW_TYPES)[number];
 
-export const LINK_RELS = ["touches", "governed-by", "implements", "see-also"] as const;
+export const LINK_RELS = ["touches", "governed-by", "implements", "see-also", "superseded-by"] as const;
 export type LinkRel = (typeof LINK_RELS)[number];
 
-export const STATUSES = ["ok", "stale", "needs-review", "pending", "open"] as const;
+export const STATUSES = ["ok", "stale", "needs-review", "pending", "open", "superseded"] as const;
 export type Status = (typeof STATUSES)[number];
 
 export const WRITERS = ["ai", "person", "migrated"] as const;

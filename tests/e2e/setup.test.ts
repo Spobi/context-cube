@@ -11,6 +11,8 @@ import { archiveCmd, restoreCmd } from "../../src/commands/archive";
 import { uninstallAgents } from "../../src/core/install";
 import { commitAll, tempProject, recordedBackend } from "../helpers";
 import * as fx from "../fixtures/projects";
+import * as scripted from "../fixtures/scripted";
+import { FakeBackend } from "../../src/ai/backends";
 
 
 // A stand-in for `claude auth status`, so tests never touch the real login.
@@ -105,6 +107,29 @@ describe("npx context-cube on each fixture", () => {
     expect(log).toContain("A cube already exists here.");
     expect(questions(log)[0]).toMatch(/^Update it/);
     expect(out.join("\n")).toMatch(/^Updated: \d+ rows/);
+  });
+
+  it("running it again after a usage limit finishes the build, instead of updating a half-built cube", async () => {
+    const root = tempProject(scripted.files);
+    commitAll(root, "init");
+    let limited = false;
+    const backend = new FakeBackend((c) => {
+      if (c.step === "history-summaries" && !limited) {
+        limited = true;
+        return new Error("You've hit your session limit · resets 6:20pm (America/New_York)");
+      }
+      return scripted.answer(c);
+    });
+    const first = await setup({ cwd: root, yes: true, ask: scriptedAsker({}, []), backend });
+    expect(first.join("\n")).toContain("Paused: your Claude plan hit a usage limit.");
+    // Boxes are placed, so a cube "exists", but the build isn't done.
+    const log: string[] = [];
+    const out = await setup({ cwd: root, yes: true, ask: scriptedAsker({}, log), backend });
+    expect(log).not.toContain("A cube already exists here.");
+    expect(log).toContain("Continuing the build that was in progress.\n");
+    expect(out.join("\n")).toContain("All set.");
+    expect(existsSync(join(root, "context-cube/.state/archive/HISTORY.md"))).toBe(true);
+    await passes(root);
   });
 
   it("restore puts the originals back exactly, and archive moves them again, with full coverage throughout", async () => {

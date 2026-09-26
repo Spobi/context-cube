@@ -1,6 +1,6 @@
 import { findProjectRoot, TOOL_COMMAND } from "../core/paths";
 import { getBox, getRow, loadCube } from "../core/cube";
-import { bulkUpdateHeaders, CubeError, updateZ0, writeDrawer } from "../core/ops";
+import { addLink, bulkUpdateHeaders, CubeError, removeLink, updateZ0, writeDrawer } from "../core/ops";
 import { reindex } from "../core/index/index";
 import { addFragment, closeEntry, listFragments, openEntry, openNew } from "../core/history";
 import { approve, listProposals, proposeDelete, proposeEdit, proposeNew, reject, renderProposal, unapprovedChanges } from "../core/approvals";
@@ -112,6 +112,44 @@ export async function edit(id: string, opts: { summary?: string; readWhen?: stri
   await reindex(r);
   if (paths) return [paths.length ? `${box.id} now loads only with files matching ${paths.join(", ")} (not every session).` : `${box.id} loads every session again.`];
   return [`Updated ${box.id}'s header.`];
+}
+
+/**
+ * `cube supersede <id> --by <id> --note "..."`: a later decision replaced what
+ * a note, plan, or review says. Its text stays as written; a dated note says
+ * what's true now, the box is marked superseded, and it stops routing agents
+ * to invariants (path rules, related). `--undo` marks it current again.
+ */
+export async function supersede(id: string, opts: { by?: string; note?: string; undo?: boolean; cwd?: string }): Promise<string[]> {
+  const r = root(opts.cwd);
+  const cube = loadCube(r);
+  const box = getBox(cube, id);
+  if (!box || box.isRoot) throw new CubeError(`No box ${id}.`);
+  const type = getRow(cube, box.rowNum)!.type;
+  if (type === "history") throw new CubeError(`${box.id} is a history entry, a past record already. To say what changed since, add a note: ${TOOL_COMMAND} write ${box.id} Z4 --append "<note>"`);
+  if (type === "invariants") throw new CubeError(`Invariants change by approval: ${TOOL_COMMAND} propose edit ${box.id} (or propose delete), and a person approves it.`);
+  if (type === "rules") throw new CubeError(`A rule that no longer applies is taken out by a person: ${TOOL_COMMAND} delete ${box.id} --reason "<why>" (its words are kept in the archive), or ${TOOL_COMMAND} replace ${box.id} Z0 @<file> --reason "<why>" to reword it.`);
+  if (opts.undo) {
+    if (box.header?.status !== "superseded") throw new CubeError(`${box.id} isn't marked superseded.`);
+    for (const l of box.header.links.filter((x) => x.rel === "superseded-by")) removeLink(r, box.id, l.to, "superseded-by");
+    appendToDrawer(r, box.id, 4, `No longer marked superseded${opts.note ? `: ${opts.note}` : "."}`);
+    bulkUpdateHeaders(r, new Map([[box.id, { status: "ok" }]]));
+    await reindex(r);
+    return [`${box.id} is marked current again (a dated note in Z4 says so).`];
+  }
+  const note = opts.note?.trim();
+  if (!note) throw new CubeError(`Say what's true now: ${TOOL_COMMAND} supersede ${box.id} --by <history entry or box> --note "<what replaced it>"`);
+  const by = opts.by ? getBox(cube, opts.by) : undefined;
+  if (opts.by && !by) throw new CubeError(`No box ${opts.by}. --by names the history entry or box that replaced it.`);
+  if (by?.id === box.id) throw new CubeError("A box can't supersede itself.");
+  appendToDrawer(r, box.id, 4, `Superseded${by ? ` by [[${by.id}]] ${by.name}` : ""}: ${note}`);
+  if (by) addLink(r, box.id, by.id, "superseded-by", note.slice(0, 200));
+  bulkUpdateHeaders(r, new Map([[box.id, { status: "superseded" }]]));
+  await reindex(r);
+  return [
+    `Marked ${box.id} superseded${by ? ` by ${by.id}` : ""}. Its text stays as written; a dated note at the end of Z4 says what's true now.`,
+    "Agents see it marked in the row index and in related, and it no longer points them at invariants.",
+  ];
 }
 
 // ---------- invariant proposals and approval ----------

@@ -36,6 +36,8 @@ import { buildDir, BuildStopped, loadChunks, type BuildContext, type BuildState,
 import type { Chunk } from "./split";
 import type { AICallLog } from "../../ai/runner";
 import type { Link } from "../format/header";
+import type { Tier } from "../../adapters/types";
+import { TIER_NAME, TIER_ORDER } from "../../ai/tiers";
 
 /**
  * Pipeline steps 7–15 (plan 6): row structure, review, place, enrich, code
@@ -382,7 +384,8 @@ async function gitextras(ctx: BuildContext, state: BuildState) {
   const has = (kind: string) => chunks.some((c) => c.kind === kind && c.role === "entry");
   let cube = loadCube(root);
 
-  if (!has("history") && commits.length) {
+  // A build that resumes after a usage limit comes back here; its entries from git are already made.
+  if (!has("history") && commits.length && !cube.rows.find((r) => r.type === "history")!.boxes.length) {
     const unit =
       config.history.unit ??
       ((await ctx.ask.choose("History will come from git. Each entry is one:", ["day", "commit", "release", "pr", "build", "session"], commits.length > 80 ? "day" : "commit")) as NonNullable<typeof config.history.unit>);
@@ -698,19 +701,23 @@ async function install(ctx: BuildContext, state: BuildState) {
   const since = String(state.startedAt ?? "");
   const calls = readJsonl<AICallLog>(logFiles(root).aiCalls).filter((c) => !since || c.t >= since);
   const bySteps = new Map<string, { in: number; out: number; calls: number }>();
+  const byTier = new Map<Tier, number>();
   for (const c of calls) {
     const s = bySteps.get(c.step) ?? { in: 0, out: 0, calls: 0 };
     s.in += c.tokensIn;
     s.out += c.tokensOut;
     s.calls++;
     bySteps.set(c.step, s);
+    byTier.set(c.tier, (byTier.get(c.tier) ?? 0) + c.tokensIn + c.tokensOut);
   }
   const total = [...bySteps.values()].reduce((n, s) => n + s.in + s.out, 0);
   ctx.ask.say("");
   ctx.ask.say(`Done. The cube has ${cube.rows.length} rows and ${fmtInt(allBoxes(cube).filter((b) => !b.isRoot).length)} boxes: context-cube/CUBE.md`);
   if (state.coverage) ctx.ask.say(`Every line of your ${(state.coverage as any).sources} source files is in the cube, word for word. Your original files weren't changed.`);
   if (total) {
-    ctx.ask.say(`AI tokens used by this build: ${fmtInt(total)}${[...bySteps].length ? ` (${[...bySteps].map(([s, v]) => `${s} ${fmtInt(v.in + v.out)}`).join(", ")})` : ""}.`);
+    const models = TIER_ORDER.filter((t) => byTier.get(t)).map((t) => `${TIER_NAME[t]} ${fmtInt(byTier.get(t)!)}`);
+    ctx.ask.say(`AI tokens used by this build: ${fmtInt(total)}, by model: ${models.join(", ")}.`);
+    ctx.ask.say(`  By step: ${[...bySteps].map(([s, v]) => `${s} ${fmtInt(v.in + v.out)}`).join(", ")}.`);
   }
 }
 

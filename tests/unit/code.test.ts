@@ -65,7 +65,7 @@ describe("code links", () => {
     const root = await project();
     const rule = readFileSync(join(root, ".claude/rules/cube-Y02-X001.md"), "utf8");
     expect(rule).toMatch(/^---\npaths:\n  - "src\/call\/clock\.swift"\n  - "src\/call\/ring\.swift"\n---\n/);
-    expect(rule).toContain("Before editing this file, open Y02.X001 Z1:");
+    expect(rule).toContain("Context Cube: before editing this file, open invariant Y02.X001, a rule that must never be broken:");
   });
 });
 

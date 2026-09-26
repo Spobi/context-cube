@@ -64,7 +64,7 @@ describe("stats: what was read", () => {
     await reindex(root);
     const t = "2099-01-01T10:00:00.000Z";
     const edits = [{ t, session: "s1", tool: "Edit", file: "src/handshake.ts" }];
-    const ruleLoaded: ReadRecord = { t, session: "s1", tool: "Instructions", file: ".claude/rules/cube-Y03-X001.md", chars: 400, tokens: 100, loadReason: "path_glob_match" };
+    const ruleLoaded: ReadRecord = { t, session: "s1", tool: "Instructions", file: ".claude/rules/cube-Y02-X001.md", chars: 400, tokens: 100, loadReason: "path_glob_match" };
     expect(computeStats(root, { reads: [ruleLoaded], edits }).sessions[0].misses).toEqual([]);
     const cube = loadCube(root);
     const opened: ReadRecord = { t, session: "s1", tool: "Read", file: `context-cube/${getBox(cube, "Y02.X001")!.relDir}/Z1-invariants.md`, chars: 40, tokens: 10 };

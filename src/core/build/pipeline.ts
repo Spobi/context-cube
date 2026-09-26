@@ -1,13 +1,15 @@
 import { join } from "node:path";
 import { exists, readJsonOr, remove, writeJson } from "../fsutil";
 import { cubePaths } from "../paths";
-import { loadConfig } from "../config";
+import { defaultConfig, loadConfig } from "../config";
 import { listProjectFiles } from "../scan";
 import { git, gitRoot } from "../git";
-import { fmtInt } from "../tokens";
+import { estimateTokens, fmtApprox, fmtInt } from "../tokens";
+import { isAgentFile } from "../logs/memoryFiles";
 import { scanCandidates, type Candidate } from "./scan";
 import { classifyCandidates, classifyEstimate, describeClass, type Classified } from "./classify";
-import { estimateBuild, readSource, toConfirmed, type ConfirmedSource, type Estimate } from "./sources";
+import { describeEstimate, estimateBuild, fmtByModel, readSource, toConfirmed, type ConfirmedSource, type Estimate, type EstimateStep } from "./sources";
+import { awayAsker, fmtClock, fmtWait, makeSchedule, parseClock, realClock, waitForStart, type Clock, type Schedule } from "./schedule";
 import { orphanPlaceholders } from "../archive";
 import type { RunContext } from "../../ai/runner";
 import { writeRecipe } from "./recipeWriter";
@@ -16,7 +18,7 @@ import { dryRun } from "./dryrun";
 import type { Chunk, RefHit } from "./split";
 import type { Asker } from "../../setup/ask";
 import type { AIBackend } from "../../ai/backends";
-import type { Preset } from "../../ai/tiers";
+import { TIER_NAME, TIER_SIZE, tierFor, type Preset } from "../../ai/tiers";
 
 /**
  * The build pipeline for existing projects (plan 6). Each stage saves its
@@ -27,6 +29,9 @@ import type { Preset } from "../../ai/tiers";
 
 export const STAGES = ["scan", "classify", "confirm", "estimate", "recipe", "split", "rows", "review", "place", "gitextras", "enrich", "codelinks", "backlinks", "check", "spotcheck", "install"] as const;
 export type Stage = (typeof STAGES)[number];
+
+/** What runs on its own when the person picks a later start: after the row review, up to the spot check. */
+export const UNATTENDED: readonly Stage[] = ["place", "gitextras", "enrich", "codelinks", "backlinks", "check"];
 
 export interface BuildState {
   version: 1;
@@ -51,6 +56,9 @@ export interface BuildContext {
   onlySources?: string[];
   /** Extra sources to include even if classified as "other". */
   addSources?: string[];
+  /** Set when the person picks a later start for the unattended stages. */
+  schedule?: Schedule;
+  clock?: Clock;
 }
 
 export function buildDir(root: string): string {
@@ -83,6 +91,38 @@ function runCtx(ctx: BuildContext): Omit<RunContext, "root"> {
 
 export class BuildStopped extends Error {}
 
+function presetOf(ctx: BuildContext): Preset {
+  if (ctx.preset) return ctx.preset;
+  try {
+    return loadConfig(ctx.root).preset;
+  } catch {
+    return "balanced";
+  }
+}
+
+/** Waits for a later start before the unattended stages, and hands questions back to the person after them. */
+async function unattended(ctx: BuildContext, on: boolean): Promise<void> {
+  const s = ctx.schedule!;
+  if (on && s.state === "waiting") {
+    if (!(await waitForStart(s, ctx.ask))) throw new BuildStopped("Didn't start. Run the command again to finish the build now, or add --at <time> to pick another time.");
+    s.person = ctx.ask;
+    ctx.ask = awayAsker(s.person);
+    s.state = "running";
+  } else if (!on && s.state === "running") {
+    ctx.ask.say(`\nThe part that ran on its own finished at ${fmtClock(new Date(s.clock.now()))}.`);
+    endUnattended(ctx);
+  }
+}
+
+/** Gives questions back to the person and lets the computer sleep again. */
+export function endUnattended(ctx: BuildContext): void {
+  const s = ctx.schedule;
+  if (!s || s.state === "done") return;
+  if (s.state === "running") ctx.ask = s.person!;
+  s.stopAwake?.();
+  s.state = "done";
+}
+
 /** Runs stages in order, skipping those already done. Returns the state. */
 export async function runPipeline(ctx: BuildContext, stages: Partial<Record<Stage, (ctx: BuildContext, s: BuildState) => Promise<void>>> = {}): Promise<BuildState> {
   const all = { ...CORE_STAGES, ...stages };
@@ -92,6 +132,7 @@ export async function runPipeline(ctx: BuildContext, stages: Partial<Record<Stag
     const fn = all[stage];
     if (!fn) continue;
     if (!state.done.includes(stage)) {
+      if (ctx.schedule) await unattended(ctx, UNATTENDED.includes(stage));
       await fn(ctx, state);
       state.done.push(stage);
       saveState(ctx.root, state);
@@ -121,7 +162,8 @@ async function classify(ctx: BuildContext, state: BuildState) {
   }
   // Even this small step asks first: no usage is spent before an estimate (plan 7, Phase 8).
   const est = classifyEstimate(ctx.root, cands);
-  const ok = await ctx.ask.confirm(`Read their headings and a short sample with a small AI model (about ${fmtInt(est)} tokens of your plan's usage)?`, true);
+  const tier = tierFor("classify", presetOf(ctx));
+  const ok = await ctx.ask.confirm(`Read their headings and a short sample with a ${TIER_SIZE[tier] === "smallest" ? "small" : TIER_SIZE[tier]} AI model (${TIER_NAME[tier]}, about ${fmtInt(est)} tokens of your plan's usage)?`, true);
   if (!ok) throw new BuildStopped("Stopped before using any AI. Run the build again when you're ready.");
   ctx.ask.say(`Reading headings and a short sample of each…`);
   const parallel = loadConfig(ctx.root).ai.parallel;
@@ -151,22 +193,48 @@ async function confirm(ctx: BuildContext, state: BuildState) {
 
 async function estimate(ctx: BuildContext, state: BuildState) {
   const sources = state.sources ?? [];
-  const extras = extrasEstimate(ctx.root, sources, Number(state.codeFiles ?? 0));
+  const preset = presetOf(ctx);
+  const extras = extrasEstimate(ctx.root, sources, Number(state.codeFiles ?? 0), preset);
   if (!sources.length && !extras.length) {
     state.estimate = { steps: [], total: 0 };
     state.approvedEstimate = true;
     return;
   }
-  const est = estimateBuild(ctx.root, sources, Number(state.codeFiles ?? 0));
+  const est = estimateBuild(ctx.root, sources, Number(state.codeFiles ?? 0), preset, state.candidates ?? []);
   est.steps.push(...extras);
   if (!sources.length) est.steps = est.steps.filter((s) => s.step === "row structure" || extras.includes(s));
   est.total = est.steps.reduce((n, s) => n + s.tokens, 0);
   state.estimate = est;
-  ctx.ask.say(`\nThe AI steps will use roughly ${fmtInt(est.total)} tokens of your plan's usage (an estimate):`);
-  for (const s of est.steps) ctx.ask.say(`  ${s.step}: ~${fmtInt(s.tokens)} (${s.note})`);
-  const ok = await ctx.ask.confirm("Go ahead?", true);
-  state.approvedEstimate = ok;
-  if (!ok) throw new BuildStopped("Stopped before using any AI. Run the build again when you're ready.");
+  for (const l of describeEstimate(est)) ctx.ask.say(l);
+
+  // Offer a later start for the part after the row review, which is most of it.
+  const now = est.steps.filter((s) => !s.later);
+  const later = est.steps.filter((s) => s.later);
+  let choice: string;
+  if (later.length) {
+    ctx.ask.say(`\nIf that's a lot for now, answer "later": the steps before your row review run now (${fmtApprox(now.reduce((n, s) => n + s.tokens, 0))}), and the rest starts on its own at a time you pick, like tonight after your plan's usage resets.`);
+    choice = await ctx.ask.choose("Go ahead?", ["now", "later", "no"], ctx.schedule ? "later" : "now");
+  } else {
+    choice = (await ctx.ask.confirm("Go ahead?", true)) ? "now" : "no";
+  }
+  state.approvedEstimate = choice !== "no";
+  if (choice === "no") throw new BuildStopped("Stopped before using any AI. Run the build again when you're ready.");
+  if (choice === "now") {
+    ctx.schedule = undefined;
+    return;
+  }
+  const clock = ctx.clock ?? realClock;
+  for (let i = 0; i < 3 && !ctx.schedule; i++) {
+    const t = await ctx.ask.text("Start the rest at what time? (like 23:30 or 11:30pm; in Claude Code, /usage shows when your usage resets)", "");
+    const at = parseClock(t, new Date(clock.now()));
+    if (at) ctx.schedule = makeSchedule(at, clock);
+    else ctx.ask.say(t ? `  "${t}" isn't a time this understands.` : "  No time given.");
+  }
+  if (!ctx.schedule) throw new BuildStopped("Stopped before using any AI. To start the rest later, run the command again with --at <time>, like --at 23:30.");
+  const s = ctx.schedule;
+  const at = s.at.getTime() - clock.now();
+  ctx.ask.say(`\nNow: ${now.map((x) => x.step).join(" and ")}, ${fmtByModel(now)}, then you review the rows.`);
+  ctx.ask.say(`At ${fmtClock(s.at, new Date(clock.now()))} (in ${fmtWait(at)}): the rest, ${fmtByModel(later)}, on its own.`);
 }
 
 async function recipe(ctx: BuildContext, state: BuildState) {
@@ -197,16 +265,57 @@ async function recipe(ctx: BuildContext, state: BuildState) {
 }
 
 async function split(ctx: BuildContext, state: BuildState) {
-  const r = loadRecipe(ctx.root);
+  let r = loadRecipe(ctx.root);
   if (!r) {
     state.chunks = 0;
     return;
   }
-  const dr = dryRun(r, (p) => readSource(ctx.root, p));
+  const read = (p: string) => readSource(ctx.root, p);
+  let dr = dryRun(r, read);
   if (!dr.coverageOk) throw new Error("The recipe doesn't cover every line of the sources. See the dry run above; fix recipe.json and run the build again.");
+  const asNotes = await offerRulesAsNotes(ctx, r, dr.chunks);
+  if (asNotes) {
+    r = asNotes;
+    saveRecipe(ctx.root, r);
+    dr = dryRun(r, read);
+  }
   saveChunks(ctx.root, dr.chunks, dr.refs);
   state.chunks = dr.chunks.length;
   state.refs = { total: dr.refs.length, resolved: dr.refs.filter((x) => x.target).length };
+}
+
+/**
+ * Rules load into every session, so they have a ceiling (limits.blockTokens).
+ * When the rules found would go over it, the ones from files that aren't agent
+ * instructions (a plan's "what we keep" section, a release runbook) are likely
+ * plans or procedures. Offer to file them as notes, which the row proposal then
+ * places in the rows they're about, where they load only when a task needs them.
+ * Returns the changed recipe, or undefined to keep it.
+ */
+async function offerRulesAsNotes(ctx: BuildContext, recipe: Recipe, chunks: Chunk[]): Promise<Recipe | undefined> {
+  const config = exists(cubePaths(ctx.root).config) ? loadConfig(ctx.root) : defaultConfig();
+  const tokens = (c: Chunk) => estimateTokens(c.text.length, config.tokens.charsPerToken);
+  const rules = chunks.filter((c) => c.kind === "rules" && c.role === "entry");
+  const total = rules.reduce((n, c) => n + tokens(c), 0);
+  const limit = config.limits.blockTokens;
+  const movable = rules.filter((c) => !isAgentFile(c.source));
+  if (total <= limit || !movable.length) return undefined;
+  const bySource = new Map<string, Chunk[]>();
+  for (const c of movable) bySource.set(c.source, [...(bySource.get(c.source) ?? []), c]);
+  ctx.ask.say(`\nThe rules found would load about ${fmtApprox(total).slice(1)} tokens into every session; the ceiling is about ${fmtApprox(limit).slice(1)}. ${movable.length} of them come from files that aren't agent instructions, so they may be plans or procedures rather than rules for every task:`);
+  for (const [path, cs] of bySource) {
+    ctx.ask.say(`  • ${path}: ${cs.length} (${fmtApprox(cs.reduce((n, c) => n + tokens(c), 0))} tokens), such as "${(cs[0].title ?? "").slice(0, 70)}"`);
+  }
+  const ok = await ctx.ask.confirm("File those with the notes instead, in the rows they're about, so they load only when a task needs them?", true);
+  if (!ok) return undefined;
+  return {
+    ...recipe,
+    sources: recipe.sources.map((s) =>
+      !bySource.has(s.path)
+        ? s
+        : { ...s, sections: s.sections.map((sec) => (sec.kind === "rules" ? { ...sec, kind: "notes" as const, split: sec.split.mode === "items" ? { mode: "whole" as const } : sec.split } : sec)) },
+    ),
+  };
 }
 
 const CORE_STAGES: Partial<Record<Stage, (ctx: BuildContext, s: BuildState) => Promise<void>>> = {
@@ -219,16 +328,21 @@ const CORE_STAGES: Partial<Record<Stage, (ctx: BuildContext, s: BuildState) => P
 };
 
 /** AI steps for projects without history or invariants files: history from git, candidate invariants. */
-function extrasEstimate(root: string, sources: ConfirmedSource[], codeFiles: number): { step: string; tokens: number; note: string }[] {
+function extrasEstimate(root: string, sources: ConfirmedSource[], codeFiles: number, preset: Preset): EstimateStep[] {
   const has = (r: string) => sources.some((s) => s.role === r || s.sections?.some((x) => x.role === r));
-  const out: { step: string; tokens: number; note: string }[] = [];
+  const out: EstimateStep[] = [];
+  const on = (ai: string) => tierFor(ai, preset);
   const commits = gitRoot(root) ? Number(git(["rev-list", "--count", "HEAD"], root).stdout.trim()) || 0 : 0;
   if (!has("history") && commits) {
-    const groups = Math.min(commits, 400) / 2;
-    out.push({ step: "history from git", tokens: Math.round(groups * 900 + 8000), note: "summarizes groups of commits" });
+    // The commits become history entries without AI (at most 200); the summaries step reads them,
+    // up to 12 a call, each call carrying the boxes it may link to (see estimateBuild).
+    const groups = Math.min(200, Math.ceil(Math.min(commits, 400) / 2));
+    const targets = 45 * (6 + Math.min(150, Math.round(codeFiles * 0.4)));
+    const tokens = Math.ceil(groups / 12) * 2 * (3000 + targets) + groups * (300 + 1250);
+    out.push({ step: "history from git", tokens, note: "summarizes groups of commits", tier: on("history-summaries"), later: true });
   }
-  if (!has("invariants") && (commits || codeFiles)) out.push({ step: "candidate invariants", tokens: 25000, note: "drafts rules from reverted and fix commits and code comments, for you to approve" });
-  if (!has("rules") && codeFiles) out.push({ step: "first rules", tokens: 8000, note: "drafts rules from the project's config files" });
+  if (!has("invariants") && (commits || codeFiles)) out.push({ step: "candidate invariants", tokens: 40_000, note: "drafts rules from reverted and fix commits and code comments, for you to approve", tier: on("candidate-invariants"), later: true });
+  if (!has("rules") && codeFiles) out.push({ step: "first rules", tokens: 20_000, note: "drafts rules from the project's config files", tier: on("interview-rules"), later: true });
   return out;
 }
 

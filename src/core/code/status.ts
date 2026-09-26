@@ -47,7 +47,8 @@ export function computeStatus(root: string, opts: { onlyFiles?: Set<string>; cub
     let missing: string[] = [];
     if (st?.names?.length) {
       idx ??= buildCodeIndex(root);
-      missing = st.names.filter((n) => filesWithName(idx!, n, 1).length === 0);
+      // Comments count here: a name that's gone from the code is gone from its comments too.
+      missing = st.names.filter((n) => filesWithName(idx!, n, 1, { raw: true }).length === 0);
       for (const n of missing) reasons.push(`\`${n}\` is no longer in the code`);
     }
     if (!reasons.length) continue;
@@ -64,9 +65,9 @@ export function applyStatus(root: string, results: BoxStatus[]): number {
   for (const r of results) {
     const box = getBox(cube, r.id);
     if (!box?.header) continue;
-    // needs-review outranks stale; pending and open are left alone.
+    // needs-review outranks stale; pending, open, and superseded are left alone.
     const cur = box.header.status;
-    if (cur === "pending" || cur === "open" || cur === r.status || (cur === "needs-review" && r.status === "stale")) continue;
+    if (cur === "pending" || cur === "open" || cur === "superseded" || cur === r.status || (cur === "needs-review" && r.status === "stale")) continue;
     updates.set(box.id, { status: r.status });
     n++;
   }

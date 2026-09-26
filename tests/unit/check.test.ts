@@ -5,6 +5,7 @@ import { runChecks } from "../../src/core/check/check";
 import { retire } from "../../src/core/state/state";
 import { reindex } from "../../src/core/index/index";
 import { smallCube } from "../fixtures/build";
+import { commitAll } from "../helpers";
 
 const C = (root: string, p: string) => join(root, "context-cube", p);
 
@@ -17,8 +18,11 @@ async function codes(root: string) {
 }
 
 describe("cube check", () => {
-  it("passes on a cube built with commands", async () => {
+  it("passes on a cube built with commands, once it's committed", async () => {
     const root = await smallCube();
+    // Uncommitted in a git repository, it exists only on this machine.
+    expect((await runChecks(root)).map((i) => i.code)).toEqual(["cube-not-committed"]);
+    commitAll(root);
     expect(await runChecks(root)).toEqual([]);
   });
 
@@ -92,7 +96,7 @@ describe("cube check", () => {
     expect(c).not.toContain("generated-edited");
     expect(c).toContain("index-outdated");
     await reindex(fresh);
-    expect(await codes(fresh)).toEqual([]);
+    expect((await codes(fresh)).filter((c) => c !== "cube-not-committed")).toEqual([]);
   });
 
   it("flags stray folders and files", async () => {

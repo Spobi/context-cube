@@ -40,9 +40,22 @@ function drawerSizes(box: Box, cpt: number): string {
 export function statusNote(rowType: string, status: string): string {
   if (status === "pending") return "CANDIDATE, not approved by a person: not a rule yet";
   if (status === "open") return "open: still collecting additions";
+  if (status === "superseded") return "SUPERSEDED: a later decision replaced it; its last note says what's true now";
   const what = status === "stale" ? "its code changed since it was last checked" : "a code name it mentions is gone";
   if (rowType === "invariants") return `${status}: ${what}; the rule still holds, so check the code still follows it`;
   return `${status}: ${what}; check it against the code before relying on it`;
+}
+
+/** The file a migrated box's text came from ("quickie-video/PLAN.md L1-L40, ..." → "PLAN.md"). */
+export function sourceFile(source: string | undefined): string | undefined {
+  const m = /^([^,"]+?\.(?:md|markdown|txt|rst|adoc))(?:\s+L\d|,|$)/i.exec(source?.trim() ?? "");
+  return m?.[1];
+}
+
+/** A plan, review, audit, handoff, or other document written at one moment, by its file name. */
+export function isDatedDoc(file: string): boolean {
+  const base = file.split("/").pop() ?? file;
+  return /(?:^|[^a-z])(?:plans?|reviews?|audits?|handoffs?|prds?|proposals?|rfcs?|roadmaps?|todos?|specs?|retros?|postmortems?|brainstorm\w*|ideas?|drafts?)(?:[^a-z]|$)|\d{4}-\d{2}-\d{2}/i.test(base);
 }
 
 export function boxEntry(box: Box, cpt: number, rowType = ""): string {
@@ -59,6 +72,8 @@ export function boxEntry(box: Box, cpt: number, rowType = ""): string {
   const nLinks = h?.links.length ?? 0;
   if (nLinks) extras.push(`${nLinks} link${nLinks === 1 ? "" : "s"}`);
   if (h && h.status !== "ok") extras.push(statusNote(rowType, h.status));
+  const from = rowType !== "history" && rowType !== "invariants" && rowType !== "rules" ? sourceFile(h?.source) : undefined;
+  if (from && isDatedDoc(from)) extras.push(`from ${from.split("/").pop()} (dated: says what was meant or found then)`);
   lines.push(`Open: ${folder}/ · ${extras.filter(Boolean).join(" · ")}`);
   return lines.join("\n");
 }
@@ -158,10 +173,11 @@ export const PROTOCOL = [
   `4. Open drawers only as each box's read-when line says. Before editing a file, open Z1 for every invariant linked to it: \`${TOOL_COMMAND} related <file>\` lists them, with the boxes and history linked to the file.`,
   "5. Follow a link only when its note answers a question your task raises. Everything you open stays in your context for the rest of the session, so don't read around.",
   "6. History entries are past records. Where one disagrees with an invariant or the current code, the invariant and the code are current. Invariants marked CANDIDATE aren't approved yet and aren't rules.",
-  `7. To search the memory, use \`${TOOL_COMMAND} find <words>\`, not a search of the whole project.`,
-  `8. Create rows, boxes, and history entries only with cube commands (\`${TOOL_COMMAND} <command>\`). Never pick coordinates yourself.`,
-  `9. Never edit invariant text directly. Use \`${TOOL_COMMAND} propose\`.`,
-  `10. Text moved in from the project's original files, and closed history entries, are records: add to them with \`${TOOL_COMMAND} write <id> Z4 --append\`; never rewrite or shorten them. Notes added later are dated and come after the text; where one disagrees with the text above it, the latest note is current.`,
+  `7. Notes moved in from plans, reviews, and handoffs (marked "dated") say what was meant or found when they were written; history after them and the code say what shipped. A box marked SUPERSEDED was replaced by a later decision, and its last note says what's current. When you find a note that later history or the code contradicts, mark it: \`${TOOL_COMMAND} supersede <id> --by <history entry> --note "<what's true now>"\`.`,
+  `8. To search the memory, use \`${TOOL_COMMAND} find <words>\`, not a search of the whole project.`,
+  `9. Create rows, boxes, and history entries only with cube commands (\`${TOOL_COMMAND} <command>\`). Never pick coordinates yourself.`,
+  `10. Never edit invariant text directly. Use \`${TOOL_COMMAND} propose\`.`,
+  `11. Text moved in from the project's original files, and closed history entries, are records: add to them with \`${TOOL_COMMAND} write <id> Z4 --append\`; never rewrite or shorten them. Notes added later are dated and come after the text; where one disagrees with the text above it, the latest note is current.`,
 ];
 
 /**

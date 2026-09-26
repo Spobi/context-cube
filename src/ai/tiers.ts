@@ -26,6 +26,10 @@ export const STEP_TIERS: Record<string, Record<Preset, Tier>> = {
 
 export const TIER_ORDER: Tier[] = ["haiku", "sonnet", "opus"];
 
+/** How a tier is named to a person, smallest first. */
+export const TIER_NAME: Record<Tier, string> = { haiku: "Haiku", sonnet: "Sonnet", opus: "Opus" };
+export const TIER_SIZE: Record<Tier, string> = { haiku: "smallest", sonnet: "mid-size", opus: "largest" };
+
 export function tierFor(step: string, preset: Preset): Tier {
   const row = STEP_TIERS[step];
   if (!row) throw new Error(`Unknown AI step "${step}".`);

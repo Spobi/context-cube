@@ -40,6 +40,8 @@ export interface SetupOptions {
   cwd?: string;
   yes?: boolean;
   preset?: string;
+  /** Start the part of the build after the row review at this time (see cube build --at). */
+  at?: string;
   shared?: boolean;
   logger?: boolean;
   ask?: Asker;
@@ -97,9 +99,10 @@ export async function setup(opts: SetupOptions = {}): Promise<string[]> {
   else if (!pf.gitRepo) say(ask, "  This folder isn't a git repository. The cube works without git; history can't come from commits, and updates happen at the end of work.");
   if (!pf.claude?.installed) say(ask, "  Claude Code isn't installed. The cube will still be written as plain files (with an AGENTS.md block), but building it from existing files needs Claude Code for its AI steps.");
   else if (pf.claude.loggedIn === false) return ["Claude Code isn't logged in. Run `claude` once and log in, then run this again."];
-  else if (pf.claude.plan) say(ask, `  Claude Code: logged in (${pf.claude.plan} plan). AI steps use your plan's usage; if it runs out mid-way, run this again after it resets and it picks up where it stopped.`);
+  else if (pf.claude.plan) say(ask, `  Claude Code: logged in (${pf.claude.plan} plan). AI steps use your plan's usage; before any big step it shows how much, by model, and you can have it start later, like overnight. If usage runs out mid-way, run this again after it resets and it picks up where it stopped.`);
 
-  if (pf.cubeExists) return updateExisting(root, ask, opts);
+  // A build that stopped partway (say, at a usage limit) has boxes already; finish it rather than "update" it.
+  if (pf.cubeExists && !pf.buildInProgress) return updateExisting(root, ask, opts);
 
   const files = listProjectFiles(root);
   const orphans = orphanPlaceholders(root, files);
@@ -119,7 +122,7 @@ export async function setup(opts: SetupOptions = {}): Promise<string[]> {
   }
   if (situation === "existing" && pf.claude?.installed) {
     say(ask, pf.buildInProgress ? "Continuing the build that was in progress.\n" : `Found ${candidates.length} file${candidates.length === 1 ? "" : "s"} that could hold project memory. Building the cube from them.\n`);
-    const buildOut = await build({ cwd: root, ask, backend: opts.backend, preset: opts.preset });
+    const buildOut = await build({ cwd: root, ask, backend: opts.backend, preset: opts.preset, at: opts.at });
     const state = loadState(root);
     if (!state.done.includes("install")) return buildOut; // paused or stopped; it said why
     await handleOriginals(root, ask, mayEditOriginals);
@@ -210,11 +213,10 @@ async function updateExisting(root: string, ask: Asker, opts: SetupOptions): Pro
 }
 
 function linkCodeForStale(root: string): void {
-  // Link only boxes that have no code links yet: re-linking the others would
-  // refresh their fingerprints and hide that their code changed.
-  const cube = loadCube(root);
-  const unlinked = allBoxes(cube).filter((b) => !b.isRoot && !loadBoxState(root, b.id)?.code).map((b) => b.id);
-  if (unlinked.length) linkCode(root, unlinked);
+  // Re-link every box, so a newer version's code search (which skips comments,
+  // for one) replaces old links; files already linked keep their fingerprints,
+  // so a change since a box was last checked still shows as stale.
+  linkCode(root, undefined, { keepFingerprints: true });
 }
 
 function finish(root: string): string[] {
@@ -248,7 +250,9 @@ function finish(root: string): string[] {
     `  • ${config.update.trigger === "commit" ? "After each commit" : config.update.trigger === "stop" ? "At the end of each session's work" : "When you run /cube-update"}, the agent writes a short note and a cheaper helper updates the cube.`,
     "  • Invariant changes need a person's approval by default. You can change this anytime by asking your AI to turn off invariant approvals (it will ask you to confirm).",
     logger ? "  • What the agent reads is logged on this machine; see it with: node context-cube/.tool/cube.mjs stats" : "",
-    "  • Commit context-cube/ like any other folder so your team shares the memory.",
+    gitRoot(root)
+      ? `  • Commit context-cube/ now${archived.length ? ", with CLAUDE.md and the placeholders," : ""} like any other folder: until you do, the cube${archived.length ? " and the archived originals" : ""} exist only on this machine, and your team doesn't share the memory.`
+      : "  • Keep context-cube/ with the project (and in version control if you add it), so the memory travels with the code.",
   );
   return out.filter((l) => l !== "");
 }

@@ -36,12 +36,12 @@ describe("candidate invariants aren't rules", () => {
     const cand = getBox(cube, res.proposal.box)!;
     expect(cand.header!.status).toBe("pending");
 
-    // No rule for the candidate, and the sync box's rule names only the approved invariant.
+    // No rule for the candidate; the approved invariant's rule loads with the sync box's file.
     const rules = pathRulesFor(cube);
     expect(rules.find((r) => r.id === `cube-${cand.id.replace(".", "-")}`)).toBeUndefined();
-    const sync = rules.find((r) => r.id === "cube-Y03-X001")!;
-    expect(sync.body).toContain("Y02.X001");
-    expect(sync.body).not.toContain(cand.id);
+    expect(rules.filter((r) => r.paths.includes("src/handshake.ts")).map((r) => r.id)).toEqual(["cube-Y02-X001"]);
+    // Only invariants get path rules; the sync box's own summary never loads as one.
+    expect(rules.find((r) => r.id === "cube-Y03-X001")).toBeUndefined();
 
     // Labeled wherever an agent reads it.
     expect(readFileSync(join(cand.dir, "Z1-invariants.md"), "utf8")).toContain("Candidate, not approved");
@@ -84,7 +84,7 @@ describe("related and find", () => {
     // Y01.X001 touches the sync box, so it touched the file's area.
     expect(r.history.map((b) => b.id)).toEqual(["Y01.X001"]);
     const text = renderRelated(r);
-    expect(text).toContain("Invariants to read before editing it (Z1):");
+    expect(text).toContain("Invariants to read before editing it (Z1), most clearly linked first:");
     expect(text).toContain("Z1-invariants.md");
     expect(text).toContain("past records");
     // Each one says how it was found, so the route can be checked.

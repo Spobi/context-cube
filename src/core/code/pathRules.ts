@@ -1,46 +1,35 @@
-import { allBoxes, getBox, getRow, isCandidate, type Cube } from "../cube";
-import { loadBoxState } from "../state/state";
+import type { Box, Cube } from "../cube";
 import { splitGenerated } from "../format/generated";
-import { TOOL_COMMAND } from "../paths";
+import { governingByFile, STRONG } from "./governs";
 import type { PathRule } from "../../adapters/types";
 
 /**
- * Surfacing invariants (plan 8.5): for each box with invariants and code
- * paths, a rule that appears when the agent works with those files, so the
- * most important rules find the agent instead of the agent looking for them.
+ * Surfacing invariants (plan 8.5): for each approved invariant, a rule that
+ * appears when the agent works with the files it governs, so the most
+ * important rules find the agent instead of the agent looking for them. Only
+ * invariants: a note's summary (an old plan, say) isn't a rule and never loads
+ * as one. Files come from governingByFile, counting only clear links.
  * Pending invariants are candidates a person hasn't approved, so they never get
  * a rule: an unapproved rule must not be enforced.
  */
 export function pathRulesFor(cube: Cube): PathRule[] {
   const rules: PathRule[] = [];
-  for (const box of allBoxes(cube)) {
-    if (box.isRoot || !box.header || isCandidate(box)) continue;
-    const row = getRow(cube, box.rowNum)!;
-    if (row.type === "history") continue;
-    const files = (loadBoxState(cube.root, box.id)?.code?.files ?? []).map((f) => f.path);
-    if (!files.length) continue;
-    const invLinks = box.header.links
-      .map((l) => getBox(cube, l.to))
-      .filter((t) => t && getRow(cube, t.rowNum)?.type === "invariants" && t.id !== box.id && !isCandidate(t));
-    const own = row.type === "invariants";
-    if (!own && !invLinks.length) continue;
-    const z1 = (id: string, rel: string) => `- ${id}: context-cube/${rel}/Z1-invariants.md`;
-    const lines = [`Context Cube: ${box.id} ${box.name} covers this file.`, box.header.summary, ""];
-    if (own) {
-      lines.push(`These are invariants: rules that must never be broken. Before editing this file, open ${box.id} Z1:`, z1(box.id, box.relDir));
-    } else {
-      lines.push("It is governed by invariants. Before editing this file, open their Z1:");
-      for (const t of invLinks) lines.push(z1(t!.id, t!.relDir));
+  const files = new Map<string, { inv: Box; files: string[] }>();
+  for (const [file, list] of governingByFile(cube)) {
+    for (const g of list) {
+      if (g.score < STRONG) continue;
+      const e = files.get(g.inv.id) ?? { inv: g.inv, files: [] };
+      e.files.push(file);
+      files.set(g.inv.id, e);
     }
+  }
+  for (const { inv, files: paths } of [...files.values()].sort((a, b) => a.inv.id.localeCompare(b.inv.id))) {
+    // One line each: a central file can load a dozen of these.
+    const lines = [`Context Cube: before editing this file, open invariant ${inv.id}, a rule that must never be broken: ${inv.header!.summary} → context-cube/${inv.relDir}/Z1-invariants.md`];
     // Stale means "verify", never "ignore": an invariant still holds when its code changes.
-    const st = box.header.status;
-    if (st === "stale" || st === "needs-review") {
-      lines.push("", own
-        ? "Its code changed since these invariants were last checked against it. They still hold; check that the code still follows them."
-        : `${box.id} is marked ${st}: its code changed since it was last checked. Check its description against the code before relying on it.`);
-    }
-    lines.push("", `More: context-cube/${box.relDir}/ · Everything linked to this file: ${TOOL_COMMAND} related <file>`);
-    rules.push({ id: `cube-${box.id.replace(".", "-")}`, paths: files, body: `${lines.join("\n")}\n` });
+    const st = inv.header!.status;
+    if (st === "stale" || st === "needs-review") lines.push("Its code changed since it was last checked. It still holds; check that the code still follows it.");
+    rules.push({ id: `cube-${inv.id.replace(".", "-")}`, paths: paths.sort(), body: `${lines.join("\n")}\n` });
   }
   // Rules scoped to files load with those files instead of every session (limits.blockTokens).
   for (const b of cube.rows.find((r) => r.type === "rules")?.boxes ?? []) {

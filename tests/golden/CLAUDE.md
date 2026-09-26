@@ -6,6 +6,7 @@ House notes stay here.
 ## Project memory (Context Cube)
 The rules below always apply. For everything else, pick rows from the list, open their row index, and open only the drawers your task needs. Full protocol: context-cube/CUBE.md
 Before changing a file, `node context-cube/.tool/cube.mjs related <file>` lists the invariants, boxes, and history linked to it. To search the memory: `node context-cube/.tool/cube.mjs find <words>`.
+Notes from old plans and reviews say what was meant then; later history and the code say what shipped.
 
 ### Rules
 - Y00.X001 Read the invariants before touching timer or sync code.

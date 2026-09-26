@@ -2,6 +2,27 @@
 
 To update a project, run `npx context-cube@latest` in it, then commit `context-cube/` so teammates get the same version.
 
+## 0.2.2 (2026-09-26)
+
+From reviewing the first real cube (a large iOS app), and the build that made it:
+
+- **Running setup again after a usage limit finishes the build.** Before, once boxes were placed, a second run took the cube as finished and only "updated" it: it installed the always-loaded block and hooks around a half-built cube, and never rewrote the rules that point at the original files or archived them, so the old files and the cube both stayed in use.
+- **The estimate is calibrated on a real build.** It said ~900,000 tokens for a build that used about 2 million. Most of the cost is fixed per AI call (the list of boxes a summary may link to, and output read back), which the estimate now counts; it came within about 10% of each step. It also counts entries from headings, no longer counts a file with several kinds of content once per kind, and drops a "row roots and link notes" line that no AI step matched.
+- **Code search ignores prose.** Comments, URLs, and import lines no longer count as code, so a box isn't tied to a file by a word in a comment ("out-of-band", "head-of-line") or a URL ("apps.apple.com"). A plain word (`band`, `Calling`) counts only where the code uses it as code. Updating a cube re-links its boxes this way, keeping each file's fingerprint so changes still show as stale.
+- **Path rules name only invariants, one line each.** Before, any box with code and an invariant link got a rule that quoted its own summary, so an old plan's "this must stay" loaded with a file whose code was gone; a central file loaded dozens of them. Now each approved invariant has one rule listing the files it clearly governs (by the file's name, a specific code name, or a box that clearly covers the file).
+- **`cube related` puts the clearest links first** and lists links made by only a plain word or two apart.
+- **Superseded notes.** `cube supersede <id> --by <entry> --note "..."` marks a note, plan, or review that a later decision replaced: its text stays, a dated note says what's current, it's labeled in the row index and in `related`, and it no longer points agents at invariants. Agents are told to mark one when they find it. The row index also marks boxes from files named like plans, reviews, or handoffs as "dated".
+- **Rules from plans and runbooks.** When the rules would go over the always-loaded ceiling, the build offers to file the ones from files that aren't agent instructions with the notes, in the rows they're about. `cube check` names such rules in an existing cube.
+- **Rewritten rules say what replaces updating a file** (`cube history add`, `cube propose`), and "**Read `HISTORY.md`** (repo root)" no longer keeps its "(repo root)".
+- **`cube check` warns when `context-cube/` isn't committed** to git, and setup's summary says to commit it now.
+
+- **The estimate is split by model.** Before the build spends usage, it shows how many tokens each model will take (Haiku, Sonnet, Opus) and which steps use it, then the same by step. On the default preset only the row proposal uses Opus. The first question, before classifying files, names the model too, and the summary at the end reports what was used by model.
+- **Run the big part later.** At the estimate, answer `later` and give a time (or pass `--at 23:30` to setup or `cube build`). The steps before the row review run now; the rest starts on its own at that time, for example overnight after your plan's usage resets. The terminal waits (on a Mac, the computer is kept from sleeping on its own), questions while you're away get their defaults, and a usage limit overnight means waiting for the reset and carrying on, starting nothing new more than 8 hours after the chosen time.
+- Usage limit messages worded "You've hit your limit · resets 4am" are recognized as limits, so the build pauses instead of retrying on a bigger model.
+- After a usage limit, calls already in flight finish and are saved before the build pauses, instead of carrying on in the background.
+- A build that resumes after a usage limit no longer makes its history-from-git entries a second time.
+- `cube build --preset`, `--yes`, and `--at` now reach the build. Before, setup's options of the same names took them, so `cube build --preset max` built with the default preset.
+
 ## 0.2.1 (2026-09-26)
 
 - **Every record is checked, not only text from archived files.** A history entry closed after setup was never checked, so it could be rewritten or its file removed without a warning. Now each record carries a mark in its box's state, set when it becomes a record, and `cube check` reports a record whose text changed, whose file is gone, or whose folder is gone. A record stays one when its box moves to another row or its file goes missing. Cubes from 0.2.0 get their marks the next time the tool indexes them.

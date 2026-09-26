@@ -88,10 +88,15 @@ export function describeClass(c: Classified): string {
   return `${c.path} looks like ${role[c.role] ?? c.role}${sections}. ${c.why}${c.confidence === "low" ? " (not sure)" : ""}`;
 }
 
-/** Rough tokens for classifying these candidates, before asking to spend them. */
+/**
+ * Rough tokens for classifying these candidates, before asking to spend them.
+ * Calibrated on a real build (21 files, 5 calls, ~117,000 tokens): each call
+ * carries ~12,000 tokens of fixed overhead, its input is read twice, and the
+ * answer runs ~1,100 tokens per file.
+ */
 export function classifyEstimate(root: string, candidates: Candidate[]): number {
   const inputs = candidates.map((c) => toInput(root, c));
   const size = (f: ClassifyFileInput) => f.outline.length + f.firstLines.length + 300;
   const calls = batches(inputs, size, BATCH_CHARS).length;
-  return Math.ceil(inputs.reduce((n, f) => n + size(f), 0) / 4) + calls * 4000 + candidates.length * 150;
+  return 2 * Math.ceil(inputs.reduce((n, f) => n + size(f), 0) / 4) + calls * 12_000 + candidates.length * 1100;
 }

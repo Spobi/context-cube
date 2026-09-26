@@ -42,13 +42,17 @@ export function buildProgram(): Command {
     .name("cube")
     .description("Context Cube: a structured project memory that AI coding agents read top-down.")
     .version(version(), "-v, --version")
-    .showHelpAfterError();
+    .showHelpAfterError()
+    // Setup's options (--yes, --preset, --at) belong to the command they follow;
+    // without this, `cube build --preset max` gave them to setup instead.
+    .enablePositionalOptions();
 
   // ---------- setup (the default: `npx context-cube`) ----------
   const setupOpts = (c: Command) =>
     c
       .option("-y, --yes", "accept every default without asking (including the offer to rewrite rules that point at your original files)")
       .option("--preset <preset>", "economy, balanced (default), or max: how capable a model each AI step uses")
+      .option("--at <time>", "start the big part of the build (after you review the rows) at this time, like 23:30 or 11:30pm, say after your plan's usage resets; the terminal waits until then")
       .option("--shared", "put the cube's hooks in the shared, committed .claude/settings.json (default: your personal settings)")
       .option("--without-logger", "don't log what the agent reads");
   const runSetup = run((opts) => setup({ ...opts, logger: opts.withoutLogger ? false : undefined }));
@@ -212,9 +216,17 @@ export function buildProgram(): Command {
     .option("--summary <text>", "one-line summary")
     .option("--read-when <text>", "when to open it")
     .option("--scope <text>", "what it covers")
-    .option("--status <status>", "ok, stale, or needs-review")
+    .option("--status <status>", "ok, stale, or needs-review (to mark a box replaced by a later decision, use supersede)")
     .option("--paths <globs>", 'rules only: comma-separated file globs (e.g. "src/ui/**"); the rule then loads with those files, not every session. "" undoes it')
     .action(run((id, opts) => living.edit(id, opts)));
+
+  program
+    .command("supersede <id>")
+    .description("Mark a note, plan, or review as replaced by a later decision. Its text stays; a dated note says what's true now.")
+    .option("--by <id>", "the history entry or box that replaced it")
+    .option("--note <text>", "what's true now, in a sentence")
+    .option("--undo", "mark it current again")
+    .action(run((id, opts) => living.supersede(id, opts)));
 
   program
     .command("propose <kind> <target>")
@@ -292,6 +304,7 @@ export function buildProgram(): Command {
     .option("--source <path>", "only consider this file (repeatable)", collect)
     .option("--add <path>", "include this file even if it doesn't look like memory (repeatable)", collect)
     .option("--preset <preset>", "economy, balanced, or max (default: the cube's setting)")
+    .option("--at <time>", "start the big part of the build (after you review the rows) at this time, like 23:30 or 11:30pm, say after your plan's usage resets; the terminal waits until then")
     .action(run((opts) => build(opts)));
   program
     .command("recipe")

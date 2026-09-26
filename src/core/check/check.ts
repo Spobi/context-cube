@@ -7,7 +7,9 @@ import { findInlineRefs } from "../format/links";
 import { idKey, parseId } from "../format/ids";
 import { loadAliases, loadRetired } from "../state/state";
 import { editedGenerated } from "../index/backlinks";
-import { cubeMd, rowPages } from "../index/pages";
+import { cubeMd, rowPages, sourceFile } from "../index/pages";
+import { isAgentFile } from "../logs/memoryFiles";
+import { git, gitRoot } from "../git";
 import { estimateTokens, fmtInt } from "../tokens";
 import { listProposals, unapprovedChanges } from "../approvals";
 import { TOOL_COMMAND } from "../paths";
@@ -60,6 +62,7 @@ export async function runChecks(root: string): Promise<Issue[]> {
   issues.push(...structureChecks(ctx));
   issues.push(...archiveChecks(root));
   issues.push(...recordChecks(root, cube));
+  issues.push(...commitChecks(root));
   for (const c of extraChecks) {
     try {
       issues.push(...(await c.fn(ctx)));
@@ -241,9 +244,21 @@ function blockChecks(root: string, cube: Cube, config: CubeConfig): Issue[] {
     .filter((r) => r.paths.length)
     .slice(0, 5)
     .map((r) => `${TOOL_COMMAND} edit ${r.id} --paths "${r.paths.join(",")}"`);
+  // Rules moved in from files that aren't agent instructions are often plans or procedures.
+  const rulesRow = cube.rows.find((r) => r.type === "rules");
+  const foreign = rules
+    .map((r) => ({ id: r.id, file: sourceFile(rulesRow?.boxes.find((b) => b.id === r.id)?.header?.source) }))
+    .filter((r): r is { id: string; file: string } => !!r.file && !isAgentFile(r.file));
+  const fromFiles = [...new Set(foreign.map((r) => r.file))];
+  const moveHint = foreign.length
+    ? ` ${foreign.length} rule${foreign.length === 1 ? "" : "s"} came from ${fromFiles.join(", ")}, not an agent instruction file (${foreign
+        .slice(0, 8)
+        .map((r) => r.id)
+        .join(", ")}${foreign.length > 8 ? ", …" : ""}); if they're plans or procedures rather than rules for every task, move each to the row it's about: \`${TOOL_COMMAND} move <id> <row>\`.`
+    : "";
   const fix = suggest.length
-    ? `Rules that are only about certain files can load with those files instead. Only do it for a rule that can't matter elsewhere (a rule about where new files go must stay). Candidates: ${suggest.join(" ; ")}`
-    : "Keep only rules that apply to every task in the rules row; scope file-specific ones with `cube edit <id> --paths`, or merge small rows.";
+    ? `Rules that are only about certain files can load with those files instead. Only do it for a rule that can't matter elsewhere (a rule about where new files go must stay). Candidates: ${suggest.join(" ; ")}.${moveHint}`
+    : `Keep only rules that apply to every task in the rules row; scope file-specific ones with \`${TOOL_COMMAND} edit <id> --paths\`, or merge small rows.${moveHint}`;
   if (tokens > limit) {
     return [{ level: "warn", code: "block-too-large", message: `The always-loaded block is ~${fmtInt(tokens)} tokens, over its ceiling of ~${fmtInt(limit)} even with the row list shortened (rules ~${fmtInt(ruleTokens)}, ${rules.length} of them). It is read at the start of every session.`, fix }];
   }
@@ -256,6 +271,25 @@ function blockChecks(root: string, cube: Cube, config: CubeConfig): Issue[] {
 
 function unshortenedBlockTokens(cube: Cube, config: CubeConfig): number {
   return estimateTokens(alwaysLoadedBlock(cube, { ...config, limits: { ...config.limits, blockTokens: Number.MAX_SAFE_INTEGER } }).length, config.tokens.charsPerToken);
+}
+
+/**
+ * In a git repository, the cube is meant to be committed: until it is, it (and
+ * any originals archived in it) exists only on this machine, and new history
+ * written into it goes nowhere else.
+ */
+function commitChecks(root: string): Issue[] {
+  if (!gitRoot(root)) return [];
+  const r = git(["ls-files", "--", "context-cube/CUBE.md"], root);
+  if (!r.ok || r.stdout.trim()) return [];
+  return [
+    {
+      level: "warn",
+      code: "cube-not-committed",
+      message: "context-cube/ isn't committed to git. Until it is, the cube, the history written into it, and any original files archived in it exist only on this machine, and teammates don't get them.",
+      fix: "Commit it with the rest of the change: git add context-cube (plus CLAUDE.md and any archive placeholders), then git commit.",
+    },
+  ];
 }
 
 /** Records (text moved from the original files, closed history entries) still hold their text word for word, unless a person changed it on purpose. */

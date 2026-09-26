@@ -6,7 +6,7 @@ import { parseDoc } from "./format/header";
 import { FROM_RE } from "./build/place";
 import { loadBoxState } from "./state/state";
 import { relToRoot, CUBE_DIR } from "./paths";
-import { invariantsFor } from "./stats/reads";
+import { invariantsFor, linkStrength, STRONG } from "./code/governs";
 import { listOrder } from "./index/pages";
 
 /**
@@ -54,13 +54,16 @@ export interface Related {
   candidates: RelatedBox[];
   /** Rules that load only with matching files. */
   rules: RelatedBox[];
+  /** Linked only by a plain word or two, which may be prose: listed by id, open only if the task is about them. */
+  weak: RelatedBox[];
 }
 
 function entry(box: Box, why: string[], drawer?: string): RelatedBox {
+  const by = box.header?.links.find((l) => l.rel === "superseded-by")?.to;
   return {
     id: box.id,
     name: box.name,
-    summary: box.header?.summary ?? "",
+    summary: `${box.header?.status === "superseded" ? `(superseded${by ? ` by ${by}` : ""}: read its last note first) ` : ""}${box.header?.summary ?? ""}`,
     path: `${CUBE_DIR}/${box.relDir}/${drawer ?? ""}`,
     why,
   };
@@ -74,7 +77,7 @@ function commitsWhy(hashes: string[]): string {
 
 export function related(root: string, query: string, cwd = process.cwd(), cube: Cube = loadCube(root)): Related {
   const asPath = relToRoot(root, isAbsolute(query) ? query : resolve(cwd, query)).replace(/\/+$/, "");
-  const out: Related = { query, kind: "name", invariants: [], boxes: [], history: [], candidates: [], rules: [] };
+  const out: Related = { query, kind: "name", invariants: [], boxes: [], history: [], candidates: [], rules: [], weak: [] };
   const boxes = allBoxes(cube).filter((b) => !b.isRoot && b.header);
   const state = new Map(boxes.map((b) => [b.id, loadBoxState(root, b.id)]));
   const fileHit = (f: string) => f === asPath || f.startsWith(`${asPath}/`);
@@ -100,6 +103,9 @@ export function related(root: string, query: string, cwd = process.cwd(), cube: 
   };
 
   const why = new Map<string, string[]>();
+  // How clearly each box or invariant is tied to the query (see code/governs.ts).
+  const strength = new Map<string, number>();
+  const stronger = (id: string, n: number) => strength.set(id, (strength.get(id) ?? 0) + n);
   const because = (id: string, reason: string) => {
     const list = why.get(id) ?? [];
     if (!list.includes(reason)) list.push(reason);
@@ -126,11 +132,16 @@ export function related(root: string, query: string, cwd = process.cwd(), cube: 
     }
     if (!code) continue;
     because(b.id, code);
+    const s = out.kind === "path" ? linkStrength(code) : STRONG;
+    stronger(b.id, s);
     if (row.type === "invariants") (isCandidate(b) ? cand : inv).set(b.id, b);
     else about.push(b);
+    // A box only passes its invariants on when it clearly covers the file and is still current.
+    if (row.type === "invariants" || s < STRONG || b.header?.status === "superseded") continue;
     for (const i of invariantsFor(cube, b)) {
       inv.set(i.id, i);
-      if (i.id !== b.id) because(i.id, `via ${b.id}`);
+      stronger(i.id, STRONG);
+      because(i.id, `via ${b.id}`);
     }
     for (const l of b.header?.links ?? []) {
       const t = getBox(cube, l.to);
@@ -141,7 +152,7 @@ export function related(root: string, query: string, cwd = process.cwd(), cube: 
     }
   }
   // History entries that link to a box about it touched it too.
-  const aboutIds = new Set([...about, ...inv.values()].map((b) => b.id));
+  const aboutIds = new Set([...about, ...inv.values()].filter((b) => (strength.get(b.id) ?? 0) >= STRONG).map((b) => b.id));
   for (const b of boxes) {
     if (getRow(cube, b.rowNum)?.type !== "history") continue;
     for (const l of b.header?.links ?? []) {
@@ -152,9 +163,14 @@ export function related(root: string, query: string, cwd = process.cwd(), cube: 
     }
   }
   const reasons = (b: Box) => why.get(b.id) ?? [];
-  out.invariants = [...inv.values()].map((b) => entry(b, reasons(b), "Z1-invariants.md"));
+  const score = (b: Box) => strength.get(b.id) ?? 0;
+  // Clearest first; superseded boxes last, since a later decision replaced them.
+  const order = (a: Box, b: Box) => Number(a.header?.status === "superseded") - Number(b.header?.status === "superseded") || score(b) - score(a) || a.id.localeCompare(b.id);
+  const strong = (b: Box) => score(b) >= STRONG;
+  out.invariants = [...inv.values()].filter(strong).sort(order).map((b) => entry(b, reasons(b), "Z1-invariants.md"));
   out.candidates = [...cand.values()].map((b) => entry(b, reasons(b), "Z1-invariants.md"));
-  out.boxes = about.map((b) => entry(b, reasons(b)));
+  out.boxes = about.filter(strong).sort(order).map((b) => entry(b, reasons(b)));
+  out.weak = [...[...inv.values()].filter((b) => !strong(b)), ...about.filter((b) => !strong(b))].map((b) => entry(b, reasons(b)));
   out.history = [...hist.values()]
     .sort((a, b) => b.num - a.num)
     .map((b) => ({ ...entry(b, reasons(b)), date: state.get(b.id)?.date }));
@@ -165,11 +181,11 @@ export function renderRelated(r: Related, maxHistory = 8): string {
   const lines: string[] = [];
   const line = (b: RelatedBox) => `- ${b.id} ${b.name}${b.date ? ` (${b.date})` : ""}${b.why.length ? ` [${b.why.join("; ")}]` : ""}: ${b.summary} → ${b.path}`;
   const what = r.kind === "path" ? r.query : `\`${r.query}\``;
-  if (!r.invariants.length && !r.boxes.length && !r.history.length && !r.candidates.length && !r.rules.length) {
+  if (!r.invariants.length && !r.boxes.length && !r.history.length && !r.candidates.length && !r.rules.length && !r.weak.length) {
     return `The cube has nothing linked to ${what}. To search its text: cube find "<words>"`;
   }
   lines.push(`What the cube holds about ${what} (in brackets: how each was found):`);
-  if (r.invariants.length) lines.push("", "Invariants to read before editing it (Z1):", ...r.invariants.map(line));
+  if (r.invariants.length) lines.push("", "Invariants to read before editing it (Z1), most clearly linked first:", ...r.invariants.map(line));
   if (r.rules.length) lines.push("", "Rules for these files:", ...r.rules.map(line));
   if (r.boxes.length) lines.push("", "Boxes about it:", ...r.boxes.map(line));
   if (r.history.length) {
@@ -178,6 +194,7 @@ export function renderRelated(r: Related, maxHistory = 8): string {
     if (r.history.length > maxHistory) lines.push(`- …and ${r.history.length - maxHistory} older: ${r.history.slice(maxHistory).map((b) => b.id).join(", ")}`);
   }
   if (r.candidates.length) lines.push("", "Candidate invariants (not approved by a person; not rules):", ...r.candidates.map(line));
+  if (r.weak.length) lines.push("", `Linked only by a plain word or two, which may be prose (open one only if the task is about it): ${r.weak.map((b) => `${b.id} ${b.name}`).join(", ")}`);
   return lines.join("\n");
 }
 

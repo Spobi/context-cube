@@ -84,17 +84,19 @@ read_when: When an agent should open this box. Required.
 links:
   - to: Y05.X004
     name: video-quality          # the target's current name; kept in sync by the tool
-    rel: touches                 # touches | governed-by | implements | see-also
+    rel: touches                 # touches | governed-by | implements | see-also | superseded-by
     note: why the link matters
 scope: project-wide              # optional: what it covers (an invariant's scope; "project-wide" for history)
 paths: ["src/ui/**"]             # rules only, optional: the rule loads with these files instead of every session
-status: ok                       # ok | stale | needs-review | pending | open
+status: ok                       # ok | stale | needs-review | pending | open | superseded
 source: HISTORY.md L331-L352     # where migrated text came from
 written_by: ai                   # ai | person | migrated
 ---
 ```
 
-Statuses: `stale` means code in Z2 changed since the box was last checked; `needs-review` means a code name it mentions no longer exists; `pending` is a new invariant waiting for a person's approval; `open` is the one history entry still collecting additions. A rule whose `scope` starts with `superseded` is kept word for word but no longer loaded.
+Statuses: `stale` means code in Z2 changed since the box was last checked; `needs-review` means a code name it mentions no longer exists; `pending` is a new invariant waiting for a person's approval; `open` is the one history entry still collecting additions; `superseded` means a later decision replaced what a note, plan, or review says (it has a `superseded-by` link to what replaced it, when known, and a dated note at the end of Z4 saying what's true now). A rule whose `scope` starts with `superseded` is kept word for word but no longer loaded.
+
+- **Superseded means replaced, never deleted.** The text stays as written. A superseded box routes nothing: it passes no invariants on to the files it names, it's listed last, and tools that check code leave its status alone. History entries and invariants aren't superseded (history is already a past record; an invariant changes by approval).
 
 - **Stale means check, never delete.** A changed file says something changed, not that the box is wrong. Tools mark the box and tell agents to check it against the code; they never rewrite or drop its text because of the mark. An invariant stays in force while stale: the check is whether the code still follows it.
 - **Pending means candidate, not rule.** A pending invariant is shown to agents, labeled as not approved, but nothing enforces it: it gets no path rule, it doesn't count toward "possible misses", and backlinks to it are labeled. Approval makes it a rule.
@@ -156,7 +158,11 @@ Edits and deletions of approved invariant text wait in `.state/pending/<id>.json
 - **CUBE.md**: the reading protocol and the row list (id, name, type, root summary, when to open the row, box count, approximate size).
 - **Row indexes** (`ROW.md`, `ROW-p2.md`, …): the root's summary and conventions, then one entry per box: id, name, summary, read-when line, the drawers present with approximate token sizes, link count, and status when not `ok`. History rows list newest first. Pages split at a token budget (default ~3,000 tokens); page 1 lists the other pages and the range each covers.
 - **The always-loaded block**: written into the agent's instruction file at the project root (CLAUDE.md for Claude Code, AGENTS.md for others) between `<!-- context-cube:start -->` and `<!-- context-cube:end -->`. Nothing outside the markers is changed. It holds a short protocol, every rule without `paths`, and the row list. It is read at the start of every session, so it has a ceiling (`limits.blockTokens`, default ~3,000 tokens): above it, each row keeps only its name and when to open it, and `cube check` warns if it's still over, naming rules that could load with their files instead.
-- **Path rules**: files an agent loads when it works with certain files (in Claude Code, `.claude/rules/cube-*.md` with `paths:`). One per box that has code in Z2 and approved invariants (its own, or linked), naming the invariants to open first; and one per rule with `paths`.
+- **Path rules**: files an agent loads when it works with certain files (in Claude Code, `.claude/rules/cube-*.md` with `paths:`). One per approved invariant, listing the files it governs, in one line naming the invariant and where its Z1 is; and one per rule with `paths`. An invariant governs a file when its own text clearly names the file or its code, or when a current box that clearly does links to it (`governed-by`). "Clearly" is a weight: the file's path counts 3, a specific code name (`clockHandshake`, `peer_caps`) 2, a plain word (`decline`) 1, and a link needs 2. Only invariants get path rules; a note's summary never loads as one.
+
+## Code links
+
+Z2's code links come from code search, with no AI. A name the box's text mentions (in backticks, or shaped like code: `camelCase`, `snake_case`) links the box to the files that use it, if at most 8 files do. Comments, URLs, and import lines don't count as use, so a word in a comment ("out-of-band") or a URL ("apps.apple.com") links nothing. A plain word (`band`, `Calling`) counts only where the code clearly uses it as code: declares it, calls or labels it, reaches it as a member (`.subscribed`), or has it as a whole quoted string. Whether a name still exists, for `needs-review`, looks at comments too.
 
 ## Reading protocol
 
@@ -166,10 +172,11 @@ Edits and deletions of approved invariant text wait in `.state/pending/<id>.json
 4. Open drawers only as each box's read-when line says. Before editing a file, open Z1 for every invariant linked to it (`cube related <file>` lists them, with the boxes and history linked to the file).
 5. Follow a link only when its note answers a question your task raises. Everything opened stays in the agent's context for the rest of the session.
 6. History entries are past records. Where one disagrees with an invariant or the current code, the invariant and the code are current. Invariants marked as candidates aren't approved yet and aren't rules.
-7. To search the memory, use `cube find <words>`, not a search of the whole project.
-8. Create rows, boxes, and history entries only with the tool. Never pick coordinates yourself.
-9. Never edit invariant text directly. Propose the change; a person approves it.
-10. Text moved in from the original files, and closed history entries, are records: add to them (`cube write <id> Z4 --append`); never rewrite or shorten them. Notes added later are dated and come after the text; where one disagrees with the text above it, the latest note is current.
+7. Notes moved in from plans, reviews, and handoffs (a row index marks a box whose source file's name says so as "dated") say what was meant or found when they were written; history after them and the code say what shipped. A box marked superseded was replaced, and its last note says what's current. An agent that finds a note later history or the code contradicts marks it superseded.
+8. To search the memory, use `cube find <words>`, not a search of the whole project.
+9. Create rows, boxes, and history entries only with the tool. Never pick coordinates yourself.
+10. Never edit invariant text directly. Propose the change; a person approves it.
+11. Text moved in from the original files, and closed history entries, are records: add to them (`cube write <id> Z4 --append`); never rewrite or shorten them. Notes added later are dated and come after the text; where one disagrees with the text above it, the latest note is current.
 
 ## Token estimates
 

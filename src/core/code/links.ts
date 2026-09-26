@@ -6,7 +6,7 @@ import { splitGenerated } from "../format/generated";
 import { parseDoc } from "../format/header";
 import { git, gitRoot } from "../git";
 import { loadBoxState, newBoxState, saveBoxState, type BoxState } from "../state/state";
-import { buildCodeIndex, filesWithName, fingerprint, lineWith, type CodeIndex } from "./search";
+import { buildCodeIndex, filesWithName, fingerprint, isPlainWord, lineWith, usesAsCode, type CodeIndex } from "./search";
 import { FROM_RE } from "../build/place";
 
 /**
@@ -74,8 +74,10 @@ export function linkText(idx: CodeIndex, text: string): { files: CodeFileRef[]; 
   }
   const names: string[] = [];
   for (const n of found.names) {
-    const files = filesWithName(idx, n, MAX_NAME_FILES + 1);
+    let files = filesWithName(idx, n, MAX_NAME_FILES + 1);
     if (!files.length || files.length > MAX_NAME_FILES) continue;
+    if (isPlainWord(n)) files = files.filter((f) => usesAsCode(idx, f, n));
+    if (!files.length) continue;
     names.push(n);
     for (const f of files.slice(0, 3)) {
       const line = lineWith(idx, f, n);
@@ -119,8 +121,13 @@ export interface LinkResult {
   historyWithCommits: number;
 }
 
-/** Links every box (or the given ones) to code, and records fingerprints. */
-export function linkCode(root: string, ids?: string[], opts: { keys?: Map<string, string> } = {}): LinkResult {
+/**
+ * Links every box (or the given ones) to code, and records fingerprints. With
+ * `keepFingerprints`, a file that was already linked keeps the fingerprint it
+ * had, so re-linking (say, after an update finds code better) doesn't hide
+ * that the file changed since the box was last checked.
+ */
+export function linkCode(root: string, ids?: string[], opts: { keys?: Map<string, string>; keepFingerprints?: boolean } = {}): LinkResult {
   const cube = loadCube(root);
   const idx = buildCodeIndex(root);
   const commits = loadCommits(root);
@@ -143,7 +150,8 @@ export function linkCode(root: string, ids?: string[], opts: { keys?: Map<string
       const linked = linkText(idx, boxText(box));
       st.code = { files: linked.files };
       st.names = linked.names;
-      st.fingerprints = Object.fromEntries(linked.files.map((f) => [f.path, fingerprint(root, f.path) ?? ""]));
+      const had = opts.keepFingerprints ? st.fingerprints ?? {} : {};
+      st.fingerprints = Object.fromEntries(linked.files.map((f) => [f.path, had[f.path] ?? fingerprint(root, f.path) ?? ""]));
       if (linked.files.length) result.withCode++;
     }
     saveBoxState(root, st);

@@ -33,6 +33,7 @@ function blockText(cube: Cube, config: CubeConfig, compact: boolean): string {
     "## Project memory (Context Cube)",
     "The rules below always apply. For everything else, pick rows from the list, open their row index, and open only the drawers your task needs. Full protocol: context-cube/CUBE.md",
     `Before changing a file, \`${TOOL_COMMAND} related <file>\` lists the invariants, boxes, and history linked to it. To search the memory: \`${TOOL_COMMAND} find <words>\`.`,
+    "Notes from old plans and reviews say what was meant then; later history and the code say what shipped.",
     "",
     "### Rules",
   ];

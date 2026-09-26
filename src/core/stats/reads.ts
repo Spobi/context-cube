@@ -13,6 +13,7 @@ import { readTextOr } from "../fsutil";
 import { extractBlock } from "../index/block";
 import { readAgentActivity, type AgentActivity } from "../logs/transcript";
 import { openedBoxes, type OpenedBox } from "./unused";
+import { governingByFile, STRONG } from "../code/governs";
 
 /**
  * What was read (plan 10). Compares what the agent read with what reading the
@@ -83,11 +84,7 @@ function indexPages(row: Row): string[] {
 }
 
 /** Approved invariants that govern a box: its own Z1 in an invariants row, or links to invariants boxes. Candidates don't count. */
-export function invariantsFor(cube: Cube, box: Box): Box[] {
-  const row = getRow(cube, box.rowNum)!;
-  if (row.type === "invariants") return isCandidate(box) ? [] : [box];
-  return (box.header?.links ?? []).map((l) => getBox(cube, l.to)).filter((b): b is Box => !!b && getRow(cube, b.rowNum)?.type === "invariants" && !isCandidate(b));
-}
+export { invariantsFor } from "../code/governs";
 
 /** When the cube was first built here: the earliest box state. */
 export function cubeSince(root: string, cube: Cube): string | undefined {
@@ -112,11 +109,8 @@ export function computeStats(
   const memory = new Set(config.memoryFiles ?? detectMemoryFiles(root));
   const now = opts.now ?? new Date();
 
-  // Code files per box, and path rules by box, for "possible misses".
-  const boxesByFile = new Map<string, Box[]>();
-  for (const b of allBoxes(cube)) {
-    for (const f of loadBoxState(root, b.id)?.code?.files ?? []) boxesByFile.set(f.path, [...(boxesByFile.get(f.path) ?? []), b]);
-  }
+  // The invariants that govern each code file, for "possible misses".
+  const governs = governingByFile(cube);
 
   const bySession = new Map<string, ReadRecord[]>();
   for (const r of reads) bySession.set(r.session, [...(bySession.get(r.session) ?? []), r]);
@@ -185,18 +179,15 @@ export function computeStats(
       for (const p of indexPages(row)) upper += fileTokens(p, cpt);
       for (const b of row.allBoxes) for (const d of b.drawers) upper += fileTokens(d.path, cpt);
     }
-    // Possible misses: an edited file listed in a box with invariants, where the agent
-    // neither opened those invariants' Z1 nor had the box's path rule load.
+    // Possible misses: an edited file that invariants clearly govern, where the agent
+    // neither opened their Z1 nor had their path rule load.
     const misses: Miss[] = [];
     for (const e of editsBySession.get(session) ?? []) {
-      for (const b of boxesByFile.get(e.file) ?? []) {
-        const inv = invariantsFor(cube, b);
-        if (!inv.length) continue;
-        const opened = inv.some((i) => filesRead.has(`${CUBE_DIR}/${i.relDir}/Z1-invariants.md`));
-        const rule = `.claude/rules/cube-${b.id.replace(".", "-")}.md`;
-        if (opened || rulesLoaded.has(rule)) continue;
-        if (!misses.some((m) => m.file === e.file && m.box === b.id)) misses.push({ file: e.file, box: b.id, invariants: inv.map((i) => i.id) });
-      }
+      const governing = (governs.get(e.file) ?? []).filter((g) => g.score >= STRONG);
+      const unseen = governing.filter((g) => !filesRead.has(`${CUBE_DIR}/${g.inv.relDir}/Z1-invariants.md`) && !rulesLoaded.has(`.claude/rules/cube-${g.inv.id.replace(".", "-")}.md`));
+      if (!unseen.length) continue;
+      const box = governing.flatMap((g) => g.via)[0] ?? governing[0].inv.id;
+      if (!misses.some((m) => m.file === e.file)) misses.push({ file: e.file, box, invariants: unseen.map((g) => g.inv.id) });
     }
     // Reach: boxes opened, by the age of what they hold.
     for (const b of touchedBoxes) {
