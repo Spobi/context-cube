@@ -1,0 +1,59 @@
+{
+  "step": "history-summaries",
+  "tier": "haiku",
+  "output": {
+    "entries": [
+      {
+        "id": "Y01.X001",
+        "name": "conflict-highlighting",
+        "summary": "Added conflict highlighting.",
+        "readWhen": "Before implementing or changing conflict detection display",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X002",
+        "name": "sync-worker-threading",
+        "summary": "Moved sync worker to its own thread.",
+        "readWhen": "Before modifying the sync worker or thread management",
+        "touches": [
+          {
+            "to": "Y03",
+            "note": "moved worker to separate thread"
+          }
+        ],
+        "projectWide": false
+      },
+      {
+        "id": "Y01.X003",
+        "name": "offline-queue",
+        "summary": "Edits made offline wait in a queue and replay in order.",
+        "readWhen": "Before modifying the offline edit queue or replay logic",
+        "touches": [
+          {
+            "to": "Y03.X001",
+            "note": "implemented offline replay queue"
+          },
+          {
+            "to": "Y02.X001",
+            "note": "implements edits-replay-in-order invariant"
+          }
+        ],
+        "projectWide": false
+      },
+      {
+        "id": "Y01.X004",
+        "name": "batched-uploads",
+        "summary": "Uploads now go in batches of 50 to stay under the rate limit.",
+        "readWhen": "Before modifying the upload strategy or batch size in src/sync",
+        "touches": [
+          {
+            "to": "Y03.X003",
+            "note": "implemented batched upload grouping"
+          }
+        ],
+        "projectWide": false
+      }
+    ]
+  }
+}

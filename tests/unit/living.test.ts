@@ -152,6 +152,37 @@ describe("the guard hook", () => {
   });
 });
 
+describe("records in the guard hook", () => {
+  const pre = (root: string, tool_name: string, tool_input: Record<string, unknown>, permission_mode = "default") =>
+    handleHook("pre-tool-use", { session_id: "s", cwd: root, tool_name, tool_input, permission_mode }, root, new Set(["guard"]));
+  const cmd = (c: string) => `node context-cube/.tool/cube.mjs ${c}`;
+
+  it("blocks direct edits of a closed history entry, and asks a person before replacing or deleting one", async () => {
+    const root = await cubeProject();
+    addFragment(root, "Tried a worker thread for the clock; it deadlocked the audio session. Don't retry it.", { key: "1.0.1" });
+    closeEntry(root, {});
+    const hist = getBox(loadCube(root), "Y01.X001")!;
+    const edit = await pre(root, "Edit", { file_path: join(hist.dir, "Z4-detail.md"), old_string: "Don't retry it.", new_string: "" });
+    expect(edit.exitCode).toBe(2);
+    expect(edit.stderr).toContain("Y01.X001.Z4 is a closed history entry, a record of the past");
+    expect(edit.stderr).toContain(cmd("write Y01.X001 Z4 --append @<file>"));
+    expect(edit.stderr).toContain(cmd('replace Y01.X001 Z4 @<file> --reason "<why>" (a person confirms it)'));
+    // Its header (Z0) isn't a record: summaries and read-when lines are routing, and stay editable.
+    expect((await pre(root, "Edit", { file_path: join(hist.dir, "Z0-overview.md") })).exitCode).toBe(0);
+
+    const ask = async (c: string) => JSON.parse((await pre(root, "Bash", { command: cmd(c) })).stdout!).hookSpecificOutput;
+    expect(await ask("replace Y01.X001 Z4 @fix.md --reason typo")).toMatchObject({ permissionDecision: "ask", permissionDecisionReason: "Replacing a record's text needs a person to confirm." });
+    expect((await ask("delete Y01.X001 --reason old")).permissionDecision).toBe("ask");
+    expect((await ask('delete --reason "no longer true" Y01.X001')).permissionDecision).toBe("ask");
+    const bypass = await pre(root, "Bash", { command: cmd("delete Y01.X001 --reason old") }, "bypassPermissions");
+    expect(bypass.exitCode).toBe(2);
+    expect(bypass.stderr).toContain(`! ${cmd("delete Y01.X001 --reason old")}`);
+    // Deleting a box that holds no record doesn't ask.
+    createBox(root, 0, { name: "scratch-rule", summary: "A rule written here.", readWhen: "Always.", body: "Keep it short.\n" });
+    expect((await pre(root, "Bash", { command: cmd("delete Y00.X001") })).stdout).toBeUndefined();
+  });
+});
+
 describe("the update trigger", () => {
   const post = (root: string, command: string, session = "s1") =>
     handleHook("post-tool-use", { session_id: session, cwd: root, tool_name: "Bash", tool_input: { command }, tool_response: { stdout: "ok" } }, root, new Set(["update"]));
@@ -165,11 +196,18 @@ describe("the update trigger", () => {
     expect(ctx).toContain("Context Cube: update the project memory for commit");
     expect(ctx).toContain('history add "<note>" --key "1.0.9 (3)" --touches Y02.X001');
     expect(ctx).toContain("cube-updater");
+    expect(ctx).toContain("never rewrite or shorten what's there");
+    expect(ctx).toContain("write Y02.X001 Z4 @<file> (it has no Z4 yet");
     expect((await post(root, "git commit -m again")).stdout).toBeUndefined();
     // A commit that only changed the cube needs no update.
     writeFileSync(join(root, "context-cube/Y02-invariants/X001-sixty-second-clock/Z4-detail.md"), "detail\n");
     commitAll(root, "cube only");
     expect((await post(root, "git commit -m 'cube only'", "s2")).stdout).toBeUndefined();
+    // Once the box has a Z4, the plan adds to it instead of rewriting it.
+    writeFileSync(join(root, "src/clock.ts"), "export function endTime() { return 62; }\n");
+    commitAll(root, "Tidepool 1.0.9 (4): even longer calls");
+    const again = await post(root, "git commit -m 'Tidepool 1.0.9 (4)'", "s3");
+    expect(JSON.parse(again.stdout!).hookSpecificOutput.additionalContext).toContain("write Y02.X001 Z4 --append @<file>");
   });
 
   it("with the stop trigger, asks once at the end of a session that edited files", async () => {

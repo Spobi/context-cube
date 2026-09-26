@@ -9,7 +9,9 @@ import { installAgents } from "../../src/core/install";
 import { getBox, loadCube, readDrawer } from "../../src/core/cube";
 import { runChecks } from "../../src/core/check/check";
 import { addFragment, openEntry } from "../../src/core/history";
-import { loadAliases } from "../../src/core/state/state";
+import { loadAliases, loadBoxState } from "../../src/core/state/state";
+import { approve, listProposals, proposeEdit, unapprovedChanges } from "../../src/core/approvals";
+import { edit } from "../../src/commands/living";
 import { FIXED_GIT_ENV, tempProject } from "../helpers";
 
 function g(root: string, args: string[], date = FIXED_GIT_ENV.GIT_AUTHOR_DATE) {
@@ -94,5 +96,39 @@ describe("teams sharing a repo", () => {
     expect(z4).not.toContain("<<<<<<<");
     expect((await runChecks(root)).filter((i) => i.level === "error")).toEqual([]);
     expect(readFileSync(join(root, "context-cube/.gitattributes"), "utf8")).toContain("merge=cube-drawer");
+  });
+
+  it("keeps an approval made on one branch when the other branch touched the same box's bookkeeping later", async () => {
+    const root = await teamRepo();
+    const inv = createBox(root, 2, { name: "ring-timeout", summary: "Calls ring for at most 30 seconds.", readWhen: "Changing ringing.", drawers: { 1: "- Ring for at most 30 seconds.\n" } });
+    const { approveText } = await import("../../src/core/approvals");
+    approveText(root, inv.id, "- Ring for at most 30 seconds.\n");
+    await reindex(root);
+    g(root, ["add", "-A"]);
+    g(root, ["commit", "-q", "-m", "invariant"]);
+    // Alice gets an edit to the invariant approved on her branch.
+    g(root, ["checkout", "-q", "-b", "alice"]);
+    proposeEdit(root, inv.id, "- Ring for at most 45 seconds.\n", "carriers need longer");
+    approve(root, listProposals(root)[0].id);
+    await reindex(root);
+    g(root, ["add", "-A"]);
+    g(root, ["commit", "-q", "-m", "alice: approve 45s"], "2026-02-01T10:00:00Z");
+    // Bob, later, only changes the invariant's read-when line on his branch.
+    g(root, ["checkout", "-q", "main"]);
+    g(root, ["checkout", "-q", "-b", "bob"]);
+    await new Promise((r) => setTimeout(r, 20));
+    await edit(inv.id, { readWhen: "Changing ringing or call timeouts.", cwd: root });
+    g(root, ["add", "-A"]);
+    g(root, ["commit", "-q", "-m", "bob: read-when"], "2026-02-02T10:00:00Z");
+    g(root, ["checkout", "-q", "alice"]);
+    const out = spawnSync("git", ["-c", "commit.gpgsign=false", "merge", "--no-edit", "bob"], { cwd: root, encoding: "utf8", env: { ...process.env, ...FIXED_GIT_ENV } });
+    expect(out.status, out.stdout + out.stderr).toBe(0);
+
+    const box = getBox(loadCube(root), inv.id)!;
+    expect(readDrawer(box, 1)).toBe("- Ring for at most 45 seconds.\n");
+    expect(box.header!.read_when).toBe("Changing ringing or call timeouts.");
+    // Both sides' bookkeeping survives: Alice's approval and Bob's header change.
+    expect(unapprovedChanges(root)).toEqual([]);
+    expect(loadBoxState(root, inv.id)!.approvedZ1).toBeDefined();
   });
 });

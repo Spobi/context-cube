@@ -17,6 +17,7 @@ await build({
   banner: {
     js: [
       "#!/usr/bin/env node",
+      `const __CUBE_TOOL_VERSION__ = ${JSON.stringify(pkg.version)};`,
       "import { createRequire as __cubeCreateRequire } from 'node:module';",
       "const require = __cubeCreateRequire(import.meta.url);",
     ].join("\n"),

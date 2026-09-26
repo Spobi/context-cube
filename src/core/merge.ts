@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { readTextOr, writeText } from "./fsutil";
+import { readTextOr, writeJson, writeText } from "./fsutil";
 import { joinGenerated, splitGenerated } from "./format/generated";
 import { splitFrontmatter } from "./format/header";
 import { git } from "./git";
@@ -11,7 +11,8 @@ import { git } from "./git";
  * Merging cube files (plan 11). Generated files never block a merge: git keeps
  * one side and the post-merge hook regenerates them. Drawer files merge their
  * own text normally and drop the generated sections (regenerated after the
- * merge). Per-box state keeps the side updated most recently.
+ * merge). Per-box state merges field by field: what only one side changed is
+ * kept, and where both changed the same field, the side updated most recently wins.
  */
 
 export type MergeKind = "generated" | "drawer" | "state";
@@ -22,15 +23,16 @@ export function mergeFile(kind: MergeKind, base: string, ours: string, theirs: s
   if (kind === "state") {
     const parse = (p: string) => {
       try {
-        return JSON.parse(readTextOr(p, "")) as { updated?: string };
+        return JSON.parse(readTextOr(p, "")) as Json & { updated?: string };
       } catch {
         return undefined;
       }
     };
+    const o = parse(base);
     const a = parse(ours);
     const b = parse(theirs);
     if (!a && b) writeText(ours, readTextOr(theirs, ""));
-    else if (a && b && (b.updated ?? "") > (a.updated ?? "")) writeText(ours, readTextOr(theirs, ""));
+    else if (a && b) writeJson(ours, mergeJson(o, a, b, (b.updated ?? "") > (a.updated ?? "")));
     return 0;
   }
   // Drawer: merge the header (Z0) and own text; generated sections are rebuilt later.
@@ -54,6 +56,33 @@ export function mergeFile(kind: MergeKind, base: string, ours: string, theirs: s
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+type Json = { [key: string]: unknown };
+
+const isObject = (v: unknown): v is Json => typeof v === "object" && v !== null && !Array.isArray(v);
+const same = (x: unknown, y: unknown) => JSON.stringify(x) === JSON.stringify(y);
+
+/**
+ * Three-way merge of two JSON objects: a field only one side changed keeps that
+ * change (so one person's approval checksum survives another's later link
+ * refresh); where both changed it, nested objects merge the same way and
+ * anything else takes the newer side.
+ */
+export function mergeJson(base: unknown, ours: Json, theirs: Json, theirsNewer: boolean): Json {
+  const b = isObject(base) ? base : {};
+  const out: Json = {};
+  for (const key of new Set([...Object.keys(ours), ...Object.keys(theirs)])) {
+    const [o, a, t] = [b[key], ours[key], theirs[key]];
+    let v: unknown;
+    if (same(a, t)) v = a;
+    else if (same(o, a)) v = t;
+    else if (same(o, t)) v = a;
+    else if (isObject(a) && isObject(t)) v = mergeJson(o, a, t, theirsNewer);
+    else v = theirsNewer ? t : a;
+    if (v !== undefined) out[key] = v;
+  }
+  return out;
 }
 
 export const DRIVERS: Record<MergeKind, string> = {

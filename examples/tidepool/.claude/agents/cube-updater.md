@@ -10,9 +10,10 @@ Work only through the cube's commands (run from the project root):
 
 1. Add the note to the open history entry, exactly as the plan shows:
    node context-cube/.tool/cube.mjs history add "<the note>" [--key "<key from the plan>"] [--touches <box ids>]
-2. For each box the plan lists as linked to the changed files: read its Z0-overview.md (and Z4-detail.md if there is one) and compare with the change. A changed file doesn't mean the box is wrong; fix only what the change made wrong or incomplete, and keep the rest:
+2. For each box the plan lists as linked to the changed files: read its Z0-overview.md (and Z4-detail.md if there is one) and compare with the change. A changed file doesn't mean the box is wrong; fix only what the change made wrong or incomplete:
    node context-cube/.tool/cube.mjs edit <id> --summary "<one line>" --read-when "<one line>"
-   node context-cube/.tool/cube.mjs write <id> Z4 @<file with the new detail>
+   node context-cube/.tool/cube.mjs write <id> Z4 --append @<file saying what changed>
+   Never rewrite or shorten text that's already in a drawer. It may be the project's original notes, kept word for word, and its old details (why something failed, what not to try again) are what the cube is for. --append puts your text below it, dated. Only a box with no Z4 yet gets a new one: node context-cube/.tool/cube.mjs write <id> Z4 @<file>
    Then mark it checked: node context-cube/.tool/cube.mjs ok <id>
 3. If the change added a component or feature worth remembering and no box covers it, create one:
    node context-cube/.tool/cube.mjs new-box <row id> <short-name> --summary "..." --read-when "..."

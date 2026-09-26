@@ -1,0 +1,104 @@
+{
+  "step": "history-summaries",
+  "tier": "haiku",
+  "output": {
+    "entries": [
+      {
+        "id": "Y01.X025",
+        "name": "export-25-added",
+        "summary": "Added export option 25 for report screen. Fixed empty-report crash.",
+        "readWhen": "Before changing report export options, or when empty reports fail to load",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X026",
+        "name": "export-26-added",
+        "summary": "Added export option 26 for report screen. Fixed empty-report crash.",
+        "readWhen": "Before changing report export options, or when empty reports fail to load",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X027",
+        "name": "export-27-and-shortcut-added",
+        "summary": "Added export option 27 and keyboard shortcut for action 27. Fixed empty-report crash.",
+        "readWhen": "Before changing report export options or keyboard shortcuts, or when empty reports fail to load",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X028",
+        "name": "export-28-added",
+        "summary": "Added export option 28 for report screen. Fixed empty-report crash.",
+        "readWhen": "Before changing report export options, or when empty reports fail to load",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X029",
+        "name": "export-29-added",
+        "summary": "Added export option 29 for report screen. Fixed empty-report crash.",
+        "readWhen": "Before changing report export options, or when empty reports fail to load",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X030",
+        "name": "export-30-and-shortcut-added",
+        "summary": "Added export option 30 and keyboard shortcut for action 30. Fixed empty-report crash.",
+        "readWhen": "Before changing report export options or keyboard shortcuts, or when empty reports fail to load",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X031",
+        "name": "export-31-added",
+        "summary": "Added export option 31 for report screen. Fixed empty-report crash.",
+        "readWhen": "Before changing report export options, or when empty reports fail to load",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X032",
+        "name": "export-32-added",
+        "summary": "Added export option 32 for report screen. Fixed empty-report crash.",
+        "readWhen": "Before changing report export options, or when empty reports fail to load",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X033",
+        "name": "export-33-and-shortcut-added",
+        "summary": "Added export option 33 and keyboard shortcut for action 33. Fixed empty-report crash.",
+        "readWhen": "Before changing report export options or keyboard shortcuts, or when empty reports fail to load",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X034",
+        "name": "export-34-added",
+        "summary": "Added export option 34 for report screen. Fixed empty-report crash.",
+        "readWhen": "Before changing report export options, or when empty reports fail to load",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X035",
+        "name": "export-35-added",
+        "summary": "Added export option 35 for report screen. Fixed empty-report crash.",
+        "readWhen": "Before changing report export options, or when empty reports fail to load",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X036",
+        "name": "export-36-and-shortcut-added",
+        "summary": "Added export option 36 and keyboard shortcut for action 36. Fixed empty-report crash.",
+        "readWhen": "Before changing report export options or keyboard shortcuts, or when empty reports fail to load",
+        "touches": [],
+        "projectWide": true
+      }
+    ]
+  }
+}

@@ -55,9 +55,9 @@ The whole format is in [docs/FORMAT.md](docs/FORMAT.md), so any tool can read or
 ## Day to day
 
 - **Reading:** every session starts with the rules and the row list. The agent opens rows and boxes as its task needs them. When it opens a file that invariants govern, a rule file loads and tells it which invariants to read first.
-- **Routing without guesswork:** `node context-cube/.tool/cube.mjs related <file or code name>` lists, with no AI, the invariants to read before editing it, the boxes about it, and the history that touched it. `find <words>` searches the cube's text. The cube's own bookkeeping is kept out of ordinary code searches.
+- **Routing without guesswork:** `node context-cube/.tool/cube.mjs related <file or code name>` lists, with no AI, the invariants to read before editing it, the boxes about it, and the history that touched it, each with how it was found (the code name it matched, the commit that changed the file, or the box it was reached through). `find <words>` searches the cube's text. The cube's own bookkeeping is kept out of ordinary code searches.
 - **A ceiling on what loads every session:** the block in CLAUDE.md has a size limit (about 3,000 tokens by default). As the cube grows, the row list gets shorter, and `cube check` suggests rules that are only about certain files so they can load with those files instead (`cube edit <rule id> --paths "src/ui/**"`).
-- **Updating:** after each commit, the agent is told which boxes are linked to what changed. It writes a short note, and a helper on a cheaper model files it in the open history entry and fixes what's out of date. You can also run `/cube-update` in Claude Code.
+- **Updating:** after each commit, the agent is told which boxes are linked to what changed. It writes a short note, and a helper on a cheaper model files it in the open history entry and adds what changed, dated, to the boxes it made out of date, without rewriting what's there. You can also run `/cube-update` in Claude Code.
 - **Staleness:** `node context-cube/.tool/cube.mjs status` finds boxes whose code changed, or whose code names no longer exist, without using any AI. A short notice at the start of each session lists those linked to recent work. Stale means "check this against the code," never "delete it": the text stays until someone decides it's wrong, and an invariant stays in force.
 - **Past and present:** history entries are marked as past records. Where an old entry disagrees with an invariant or the current code, the agent is told the invariant and the code win.
 - **Stats:** `node context-cube/.tool/cube.mjs stats` puts quality first: possible misses (code edited without reading the invariants that govern it) and boxes opened but possibly unused (nothing they name came up again, a sign their read-when line is too broad). Then it compares what the agent read with what reading the same areas in full would have taken, as a conservative estimate and an upper bound.
@@ -75,6 +75,12 @@ Once the cube holds a file's text word for word, setup archives the original, so
 
 A new project with no memory files has nothing to archive.
 
+## Old text stays as written
+
+The text moved in from your files, and every closed history entry, is kept as it was written. The odd old details are the point: "we tried this a year ago and it failed because of X" is what a rewrite or a summary would shorten to "the previous approach failed." So agents never rewrite that text. When it's out of date, they add a dated note below it (`cube write <id> Z4 --append`), and direct edits to its files are blocked.
+
+A person can still change it on purpose. `cube replace <id> <drawer> @<file> --reason "..."` replaces the text, and `cube delete <id> --reason "..."` removes a box that holds it. Both ask you to confirm in Claude Code, and both go in `.state/approvals.log`. `cube check` compares the text with your archived originals and points out any that changed some other way. If you edited it yourself and meant to, `cube replace <id> <drawer> --reason "..."` with no text records that.
+
 ## Invariants need a person's approval
 
 Invariant text can't be edited directly: the agent proposes a change (`propose edit`, `propose delete`, `propose new`), and a person approves it (`approve`) or rejects it (`reject`). Changes that weaken or remove a rule are flagged. A proposed new invariant (including the candidates a build drafts from git history) is visible to agents but labeled as a candidate, and nothing enforces it until a person approves it, so a wrong guess can't quietly become a rule. Every decision goes into `.state/approvals.log` with who, when, and why. Three layers enforce this: a hook that blocks direct edits and names the command to use instead, a git pre-commit check that catches edits made any other way, and `cube check`.
@@ -91,15 +97,19 @@ To turn approvals off, ask your agent to; it runs `cube config set invariants.ap
 
 ## Teams
 
-Commit `context-cube/` like any other folder (its `.logs/` stays on each person's machine). Merges are handled for you: generated files never block a merge, history additions go in separate files so two people never edit the same one, and if two branches both create box `Y05.X016`, the newer one is renumbered after the merge and every link to it is rewritten. GitHub isn't required; a local git repo works, and without git the cube still works as plain files.
+Commit `context-cube/` like any other folder (its `.logs/` stays on each person's machine). Merges are handled for you: generated files never block a merge, history additions go in separate files so two people never edit the same one, each box's bookkeeping merges field by field (so an approval on one branch survives another branch's later changes to the same box), and if two branches both create box `Y05.X016`, the newer one is renumbered after the merge and every link to it is rewritten. `context-cube/.tool/cube.mjs` is the program your hooks run, so review a change to it like any code change; it should only change when someone updates Context Cube. GitHub isn't required; a local git repo works, and without git the cube still works as plain files.
 
 ## Other agents
 
 Claude Code is supported first. For other agents, the cube writes an AGENTS.md block and works as plain files, without automatic logging, updating, or enforcement. The core knows nothing about any particular agent; support for another one is a small adapter.
 
+## Updating
+
+Run `npx context-cube@latest` in the project (before it's on npm: `npx github:Spobi/context-cube`). It updates the project's copy of the tool, its hooks, and its rules, and leaves your cube's content as it is. Then commit `context-cube/` so teammates run the same version. The `@latest` matters: without it, npx may reuse a copy it cached earlier. An older version won't run against a project set up with a newer one; it says so and names the command to use instead. [CHANGELOG.md](CHANGELOG.md) lists what each version changed.
+
 ## Privacy
 
-Everything stays on your machine: the cube is plain files in your repo, and logs and stats are never sent anywhere. The only network use is your agent's own AI calls during the build and updates.
+Everything stays on your machine: the cube is plain files in your repo, and logs and stats are never sent anywhere. The only network use is your agent's own AI calls during the build and updates. Context Cube doesn't check for new versions over the network; see Updating.
 
 ## Results
 

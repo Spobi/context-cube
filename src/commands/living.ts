@@ -6,6 +6,8 @@ import { addFragment, closeEntry, listFragments, openEntry, openNew } from "../c
 import { approve, listProposals, proposeDelete, proposeEdit, proposeNew, reject, renderProposal, unapprovedChanges } from "../core/approvals";
 import { lastCommit, updatePlan } from "../core/update";
 import { installAgents, uninstallAgents } from "../core/install";
+import { installTool, version } from "../core/tool";
+import { appendToDrawer, drawerRecord, recordRefusal, replaceRecord } from "../core/records";
 import { readBody, parseLinkSpec } from "./core";
 import type { Link } from "../core/format/header";
 
@@ -52,10 +54,15 @@ export function historyShow(opts: { cwd?: string }): string[] {
 
 // ---------- writing drawers and headers ----------
 
-export async function write(id: string, drawer: string, text: string | undefined, opts: { cwd?: string }, stdin?: string): Promise<string[]> {
-  const r = root(opts.cwd);
+function drawerNum(drawer: string): number {
   const z = Number(/^Z?(\d)$/i.exec(drawer)?.[1] ?? NaN);
   if (!(z >= 0 && z <= 4)) throw new CubeError(`"${drawer}" isn't a drawer. Drawers are Z0–Z4.`);
+  return z;
+}
+
+export async function write(id: string, drawer: string, text: string | undefined, opts: { append?: boolean; cwd?: string }, stdin?: string): Promise<string[]> {
+  const r = root(opts.cwd);
+  const z = drawerNum(drawer);
   const cube = loadCube(r);
   const box = getBox(cube, id);
   if (!box) throw new CubeError(`No box ${id}.`);
@@ -64,11 +71,31 @@ export async function write(id: string, drawer: string, text: string | undefined
   }
   if (z === 2) throw new CubeError(`Z2 is written by code search. Re-link it with: ${TOOL_COMMAND} links ${box.id}`);
   const body = readBody(text ?? "-", stdin) ?? "";
+  if (opts.append) {
+    if (z === 0) throw new CubeError(`--append adds to Z1, Z3, or Z4. Z0 is the box's overview: change its summary or read-when line with ${TOOL_COMMAND} edit ${box.id}, and put detail in Z4.`);
+    if (box.header?.status === "open") throw new CubeError(`${box.id} is the open history entry. Add to it with: ${TOOL_COMMAND} history add "<note>"`);
+    appendToDrawer(r, box.id, z, body);
+    await reindex(r);
+    return [`Added to ${box.id}.Z${z}, dated, below what was there.`];
+  }
+  const rec = drawerRecord(r, cube, box, z);
+  if (rec) throw new CubeError(recordRefusal(rec));
   const withNl = body === "" || body.endsWith("\n") ? body : `${body}\n`;
   if (z === 0) updateZ0(r, box.id, (h, _old) => ({ header: h, body: withNl }));
   else writeDrawer(r, box.id, z, withNl);
   await reindex(r);
   return [`Wrote ${box.id}.Z${z}.`];
+}
+
+/** A person replaces a record on purpose (the guard hook asks them to confirm). */
+export async function replace(id: string, drawer: string, text: string | undefined, opts: { reason?: string; cwd?: string }, stdin?: string): Promise<string[]> {
+  const r = root(opts.cwd);
+  const z = drawerNum(drawer);
+  const body = text === undefined ? undefined : readBody(text, stdin) ?? "";
+  const rec = replaceRecord(r, id, z, body, opts.reason ?? "");
+  await reindex(r);
+  const what = `${rec.box.id}.Z${z}`;
+  return [body === undefined ? `Recorded ${what}'s current text as a change a person made on purpose. Logged in context-cube/.state/approvals.log.` : `Replaced ${what}. Logged in context-cube/.state/approvals.log.`];
 }
 
 export async function edit(id: string, opts: { summary?: string; readWhen?: string; scope?: string; status?: string; paths?: string; cwd?: string }): Promise<string[]> {
@@ -151,7 +178,9 @@ export function planCmd(opts: { commit?: string; cwd?: string }): string {
 export async function install(opts: { cwd?: string; shared?: boolean }): Promise<string[]> {
   const r = root(opts.cwd);
   if (!loadCube(r).rows.length) throw new CubeError("There's no cube to install. Build one first with `npx context-cube`.");
-  return installAgents(r, undefined, { shared: opts.shared });
+  const tool = installTool(r);
+  const out = await installAgents(r, undefined, { shared: opts.shared });
+  return tool.updatedFrom ? [`Updated the project's copy of Context Cube from ${tool.updatedFrom} to ${version()}.`, ...out] : out;
 }
 
 export async function uninstall(opts: { cwd?: string }): Promise<string[]> {

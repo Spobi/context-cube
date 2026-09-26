@@ -1,5 +1,5 @@
 
 <!-- cube:generated:start -->
 Invariants this links to:
-- [[Y02.X001]] ordered-edit-replay: implements the invariant that edits replay in order
+- [[Y02.X001]] ordered-edit-replay: implements edits-replay-in-order invariant
 <!-- cube:generated:end -->

@@ -1,0 +1,104 @@
+{
+  "step": "history-summaries",
+  "tier": "haiku",
+  "output": {
+    "entries": [
+      {
+        "id": "Y01.X049",
+        "name": "add-export-option-49",
+        "summary": "Added export option 49. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing export option 49, or when reports crash opening empty files",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X050",
+        "name": "add-export-option-50",
+        "summary": "Added export option 50. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing export option 50, or when reports crash opening empty files",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X051",
+        "name": "add-export-option-51",
+        "summary": "Added export option 51 and keyboard shortcut. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing export option 51 or its keyboard shortcut, or when reports crash opening empty files",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X052",
+        "name": "add-export-option-52",
+        "summary": "Added export option 52. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing export option 52, or when reports crash opening empty files",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X053",
+        "name": "add-export-option-53",
+        "summary": "Added export option 53. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing export option 53, or when reports crash opening empty files",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X054",
+        "name": "add-export-option-54",
+        "summary": "Added export option 54 and keyboard shortcut. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing export option 54 or its keyboard shortcut, or when reports crash opening empty files",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X055",
+        "name": "add-export-option-55",
+        "summary": "Added export option 55. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing export option 55, or when reports crash opening empty files",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X056",
+        "name": "add-export-option-56",
+        "summary": "Added export option 56. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing export option 56, or when reports crash opening empty files",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X057",
+        "name": "add-export-option-57",
+        "summary": "Added export option 57 and keyboard shortcut. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing export option 57 or its keyboard shortcut, or when reports crash opening empty files",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X058",
+        "name": "add-export-option-58",
+        "summary": "Added export option 58. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing export option 58, or when reports crash opening empty files",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X059",
+        "name": "add-export-option-59",
+        "summary": "Added export option 59. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing export option 59, or when reports crash opening empty files",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X060",
+        "name": "add-export-option-60",
+        "summary": "Added export option 60 and keyboard shortcut. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing export option 60 or its keyboard shortcut, or when reports crash opening empty files",
+        "touches": [],
+        "projectWide": true
+      }
+    ]
+  }
+}

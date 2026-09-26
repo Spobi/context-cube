@@ -34,13 +34,13 @@ context-cube/
       Z0-overview.md
       fragments/             additions to an open history entry, one file each
   .state/                    tool-owned, committed
-    boxes/Y05.X003.json      per box: checksums, code fingerprints, sources
+    boxes/Y05.X003.json      per box: checksums, code fingerprints, sources, records a person replaced
     retired.txt              id<TAB>date<TAB>reason, one per line
     aliases.txt              alias<TAB>coordinate, one per line
-    approvals.log            one JSON line per invariant change
+    approvals.log            one JSON line per invariant change, and per record a person replaced or deleted
     pending/                 proposed invariant edits awaiting approval
     archive/                 original source files, moved here word for word once the cube holds them
-  .tool/cube.mjs             the tool itself, so hooks and agents can run it
+  .tool/cube.mjs             the tool itself, so hooks and agents can run it; its second line declares its version
   .logs/                     per person, not committed
   .ignore                    keeps .state/, .tool/, and .logs/ out of ripgrep-based code searches
 ```
@@ -119,6 +119,15 @@ Sizes, fingerprints, and checksums are never in the header; they live in `.state
 
 Text moved from existing files is kept word for word: history entries in Z4, invariants in Z1, rules as the Z0 body, other notes in Z4. Text between entries (a file's introduction, section headings above a list) goes to the row root's Z4, each piece wrapped as `<!-- cube:from FILE Lx-Ly -->` … `<!-- cube:end-from -->`. Each box's `.state/boxes/<id>.json` records which lines of which file it holds, so the pieces can be put back together to reproduce each original file exactly.
 
+## Records
+
+Migrated text, and the Z4 of every closed history entry, are **records**: what was actually written, including old details a summary would drop (why an approach failed, what not to try again). Invariant Z1 is handled by its own approval flow instead.
+
+- A record is never rewritten by an agent. Additions go below it under a dated label, `**Added YYYY-MM-DD:**`, and before any generated section. Adding to migrated text stored bare first wraps it in `cube:from` markers, so coverage still finds it word for word; a tool finds a piece by its markers first, whatever the state says.
+- A person may replace a record on purpose, or delete a box that holds one. Each is logged in `.state/approvals.log` (`kind` `replace-record` or `delete-record`, with who, when, why, and the source lines). A replaced drawer is recorded in its box's state as `replaced: {"Z4": {"at": …, "sha": …}}`, the checksum of the text the person kept.
+- A check compares each migrated piece with its archived original and reports one that no longer matches, unless its drawer's text still has the checksum a person recorded. It also reports a box that held migrated text whose folder is gone though its state remains (removed without the tool). Sources that aren't archived aren't compared, since their files may have changed.
+- An agent adapter should block direct edits of a record's file and ask a person before a replacement or a deletion.
+
 ## Archived sources
 
 Once a cube holds a source file's text word for word, the original may be archived: it moves, byte for byte, to `.state/archive/<path>` (without the always-loaded block, if the file held one), and a placeholder takes its place, between `<!-- context-cube:archived:start -->` and `<!-- context-cube:archived:end -->`, saying where the content went. An agent instruction file keeps the always-loaded block after its placeholder.
@@ -137,7 +146,7 @@ Edits and deletions of approved invariant text wait in `.state/pending/<id>.json
 
 ## Merging
 
-`context-cube/.gitattributes` keeps both sides' lines for the append-only files, and routes generated files, drawer files, and box state through merge drivers named `cube-generated`, `cube-drawer`, and `cube-state`; a tool registers them in each clone. After a merge, duplicate numbers are resolved by renumbering the more recently added box and rewriting links that name it.
+`context-cube/.gitattributes` keeps both sides' lines for the append-only files, and routes generated files, drawer files, and box state through merge drivers named `cube-generated`, `cube-drawer`, and `cube-state`; a tool registers them in each clone. Box state merges field by field against the common ancestor: a field only one side changed keeps that change, nested objects merge the same way, and where both sides changed a field, the side with the later `updated` wins. After a merge, duplicate numbers are resolved by renumbering the more recently added box and rewriting links that name it.
 
 ## Generated files
 
@@ -157,6 +166,7 @@ Edits and deletions of approved invariant text wait in `.state/pending/<id>.json
 7. To search the memory, use `cube find <words>`, not a search of the whole project.
 8. Create rows, boxes, and history entries only with the tool. Never pick coordinates yourself.
 9. Never edit invariant text directly. Propose the change; a person approves it.
+10. Text moved in from the original files, and closed history entries, are records: add to them (`cube write <id> Z4 --append`); never rewrite or shorten them.
 
 ## Token estimates
 

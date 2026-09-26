@@ -13,6 +13,7 @@ import { listProposals, unapprovedChanges } from "../approvals";
 import { TOOL_COMMAND } from "../paths";
 import { alwaysLoadedBlock, ruleText } from "../index/index";
 import { archiveIssues } from "../archive";
+import { recordIssues, renderRecordIssue } from "../records";
 
 export interface Issue {
   level: "error" | "warn";
@@ -58,6 +59,7 @@ export async function runChecks(root: string): Promise<Issue[]> {
   const ctx: CheckContext = { root, cube, config };
   issues.push(...structureChecks(ctx));
   issues.push(...archiveChecks(root));
+  issues.push(...recordChecks(root, cube));
   for (const c of extraChecks) {
     try {
       issues.push(...(await c.fn(ctx)));
@@ -254,6 +256,14 @@ function blockChecks(root: string, cube: Cube, config: CubeConfig): Issue[] {
 
 function unshortenedBlockTokens(cube: Cube, config: CubeConfig): number {
   return estimateTokens(alwaysLoadedBlock(cube, { ...config, limits: { ...config.limits, blockTokens: Number.MAX_SAFE_INTEGER } }).length, config.tokens.charsPerToken);
+}
+
+/** Records (text moved from the original files) still hold it word for word, unless a person changed it on purpose. */
+function recordChecks(root: string, cube: Cube): Issue[] {
+  return recordIssues(root, cube).map((i) => {
+    const { message, fix } = renderRecordIssue(i);
+    return { level: "warn" as const, code: i.kind === "removed" ? "record-removed" : "record-changed", id: i.id, message, fix };
+  });
 }
 
 /** Archived source files with text added since, and placeholders whose original is gone. */

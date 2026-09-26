@@ -1,0 +1,104 @@
+{
+  "step": "history-summaries",
+  "tier": "haiku",
+  "output": {
+    "entries": [
+      {
+        "id": "Y01.X001",
+        "name": "add-export-option-one-fix-crash",
+        "summary": "Added export option 1 to report screen. Fixed crash when opening empty reports (introduced in 2.0.0).",
+        "readWhen": "Before changing report export options, or when crashes occur on empty reports",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X002",
+        "name": "add-export-option-two-fix-crash",
+        "summary": "Added export option 2 to report screen. Fixed crash when opening empty reports (introduced in 2.0.1).",
+        "readWhen": "Before changing report export options, or when crashes occur on empty reports",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X003",
+        "name": "add-export-option-three-fix-crash",
+        "summary": "Added export option 3 and keyboard shortcut for action 3. Fixed crash when opening empty reports (introduced in 2.0.2).",
+        "readWhen": "Before changing report export options or keyboard shortcuts, or when crashes occur on empty reports",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X004",
+        "name": "add-export-option-four-fix-crash",
+        "summary": "Added export option 4 to report screen. Fixed crash when opening empty reports (introduced in 2.0.3).",
+        "readWhen": "Before changing report export options, or when crashes occur on empty reports",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X005",
+        "name": "add-export-option-five-fix-crash",
+        "summary": "Added export option 5 to report screen. Fixed crash when opening empty reports (introduced in 2.0.4).",
+        "readWhen": "Before changing report export options, or when crashes occur on empty reports",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X006",
+        "name": "add-export-option-six-fix-crash",
+        "summary": "Added export option 6 and keyboard shortcut for action 6. Fixed crash when opening empty reports (introduced in 2.0.5).",
+        "readWhen": "Before changing report export options or keyboard shortcuts, or when crashes occur on empty reports",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X007",
+        "name": "add-export-option-seven-fix-crash",
+        "summary": "Added export option 7 to report screen. Fixed crash when opening empty reports (introduced in 2.0.6).",
+        "readWhen": "Before changing report export options, or when crashes occur on empty reports",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X008",
+        "name": "add-export-option-eight-fix-crash",
+        "summary": "Added export option 8 to report screen. Fixed crash when opening empty reports (introduced in 2.0.7).",
+        "readWhen": "Before changing report export options, or when crashes occur on empty reports",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X009",
+        "name": "add-export-option-nine-fix-crash",
+        "summary": "Added export option 9 and keyboard shortcut for action 9. Fixed crash when opening empty reports (introduced in 2.0.8).",
+        "readWhen": "Before changing report export options or keyboard shortcuts, or when crashes occur on empty reports",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X010",
+        "name": "add-export-option-ten-fix-crash",
+        "summary": "Added export option 10 to report screen. Fixed crash when opening empty reports (introduced in 2.0.9).",
+        "readWhen": "Before changing report export options, or when crashes occur on empty reports",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X011",
+        "name": "add-export-option-eleven-fix-crash",
+        "summary": "Added export option 11 to report screen. Fixed crash when opening empty reports (introduced in 2.1.0).",
+        "readWhen": "Before changing report export options, or when crashes occur on empty reports",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X012",
+        "name": "add-export-option-twelve-fix-crash",
+        "summary": "Added export option 12 and keyboard shortcut for action 12. Fixed crash when opening empty reports (introduced in 2.1.1).",
+        "readWhen": "Before changing report export options or keyboard shortcuts, or when crashes occur on empty reports",
+        "touches": [],
+        "projectWide": true
+      }
+    ]
+  }
+}

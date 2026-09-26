@@ -1,0 +1,34 @@
+{
+  "step": "history-summaries",
+  "tier": "haiku",
+  "output": {
+    "entries": [
+      {
+        "id": "Y01.X001",
+        "name": "first-version",
+        "summary": "First version with basic editing capability.",
+        "readWhen": "Before changing the editing system or core editing behavior",
+        "touches": [
+          {
+            "to": "Y00",
+            "note": "established basic editing capability"
+          }
+        ],
+        "projectWide": false
+      },
+      {
+        "id": "Y01.X002",
+        "name": "add-csv-export",
+        "summary": "Added CSV export capability.",
+        "readWhen": "Before changing export formats or CSV export behavior",
+        "touches": [
+          {
+            "to": "Y00",
+            "note": "added CSV export feature"
+          }
+        ],
+        "projectWide": false
+      }
+    ]
+  }
+}

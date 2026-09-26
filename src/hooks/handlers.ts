@@ -3,7 +3,8 @@ import { registerHookHandler, type HookOutcome } from "../commands/hook";
 import { sessionNotice } from "../core/code/notice";
 import { relToRoot, TOOL_COMMAND, CUBE_DIR } from "../core/paths";
 import { loadConfig } from "../core/config";
-import { getRow, loadCube } from "../core/cube";
+import { getBox, getRow, loadCube } from "../core/cube";
+import { drawerRecord, isRecordBox, recordRefusal } from "../core/records";
 import { ROW_DIR_RE } from "../core/format/ids";
 import { gitRoot } from "../core/git";
 import { isCommitCommand, lastCommit, loadMarks, onlyCubeFiles, saveMarks, updatePlan } from "../core/update";
@@ -42,6 +43,15 @@ export function protectedReason(root: string, file: string): string | undefined 
       return `Invariant text can't be edited directly. Write the new text of ${id}'s Z1 to a file, then run: ${TOOL_COMMAND} propose edit ${id} --text @<file> --reason "<why>". A person approves it (see pending ones with: ${TOOL_COMMAND} pending). To remove it: ${TOOL_COMMAND} propose delete ${id} --reason "<why>".`;
     }
   }
+  const d = /^(Y\d{2}-[^/]+)\/(X\d+)-[^/]+\/Z(\d)-[a-z]+\.md$/.exec(inner);
+  if (d) {
+    const cube = loadCube(root);
+    const rowDir = ROW_DIR_RE.exec(d[1]);
+    const row = rowDir ? getRow(cube, Number(rowDir[1])) : undefined;
+    const box = row ? getBox(cube, `${row.id}.${d[2]}`) : undefined;
+    const rec = box ? drawerRecord(root, cube, box, Number(d[3])) : undefined;
+    if (rec) return `${recordRefusal(rec)}\nDon't edit its file directly.`;
+  }
   if (inner.startsWith(".state/")) return `${rel} is tool-owned bookkeeping. Change the cube with ${TOOL_COMMAND} commands (${TOOL_COMMAND} --help lists them).`;
   if (inner.startsWith(".tool/")) return `${rel} is the tool itself. Update it by reinstalling Context Cube.`;
   if (inner === "CUBE.md" || /\/ROW(-p\d+)?\.md$/.test(inner)) return `${rel} is generated. Change the boxes instead, then run: ${TOOL_COMMAND} index`;
@@ -50,8 +60,51 @@ export function protectedReason(root: string, file: string): string | undefined 
 
 const PROTECTED_IN_BASH = /(context-cube\/(?:cube\.config\.json|\.state\/|\.tool\/)|Z1-invariants\.md)/;
 const WRITES_IN_BASH = /(>|\btee\b|\bsed\s+(-\w*\s+)*-i|\bperl\s+(-\w*\s+)*-i|\bmv\b|\bcp\b|\brm\b|\btruncate\b|\bdd\b|\bpython3?\b|\bnode\s+-e\b|\bruby\s+-e\b)/;
-const PERSON_ONLY = /(?:cube(?:\.mjs)?|context-cube)["']?\s+(config\s+set|approve|reject|restore)\b/;
+const PERSON_ONLY = /(?:cube(?:\.mjs)?|context-cube)["']?\s+(config\s+set|approve|reject|restore|replace)\b/;
+const DELETE_CMD = /(?:cube(?:\.mjs)?|context-cube)["']?\s+delete\s+([^;&|\n]*)/;
 const ARCHIVE_IN_BASH = /context-cube\/\.state\/archive\b/;
+
+/** The box a `cube delete` names, wherever its options are. */
+function deleteTarget(cmd: string): string | undefined {
+  const rest = DELETE_CMD.exec(cmd)?.[1];
+  if (rest === undefined) return undefined;
+  const id = /\bY\d{2}\.X\d+\b/.exec(rest);
+  if (id) return id[0];
+  const words = rest.match(/"[^"]*"|'[^']*'|\S+/g) ?? [];
+  for (let i = 0; i < words.length; i++) {
+    if (words[i] === "--reason") i++;
+    else if (!words[i].startsWith("-")) return words[i].replace(/^["']|["']$/g, "");
+  }
+  return undefined;
+}
+
+const PERSON_ONLY_WHAT: Record<string, string> = {
+  approve: "Approving an invariant change",
+  reject: "Rejecting an invariant change",
+  restore: "Putting an archived original file back",
+  replace: "Replacing a record's text",
+};
+
+/** Asks the person to confirm, or blocks when this session skips permission prompts. */
+function needsPerson(what: string, cmd: string, input: Record<string, unknown>): HookOutcome {
+  const mode = String(input.permission_mode ?? "default");
+  if (mode === "bypassPermissions" || mode === "dontAsk") {
+    return {
+      exitCode: 2,
+      stderr: `${what} needs a person, and this session skips permission prompts. Ask the person to run it themselves (in Claude Code they can type: ! ${cmd.trim()}).`,
+    };
+  }
+  return {
+    exitCode: 0,
+    stdout: JSON.stringify({
+      hookSpecificOutput: {
+        hookEventName: "PreToolUse",
+        permissionDecision: "ask",
+        permissionDecisionReason: `${what} needs a person to confirm.`,
+      },
+    }),
+  };
+}
 
 /** Why the agent is kept out of the archive, and where to look instead. */
 export const ARCHIVE_REASON = `context-cube/.state/archive/ holds original memory files whose content now lives in the cube, word for word. Read the cube instead: start at context-cube/CUBE.md, or search it with: ${TOOL_COMMAND} find <words>. If the person wants an original file back, they can run: ${TOOL_COMMAND} restore <file>`;
@@ -78,25 +131,12 @@ registerHookHandler(async (event, input, root, features): Promise<HookOutcome | 
     return { exitCode: 2, stderr: reason ?? `That command would change a file Context Cube protects. Use ${TOOL_COMMAND} commands instead.` };
   }
   const m = PERSON_ONLY.exec(cmd);
-  if (m) {
-    const what = m[1].startsWith("config") ? "Changing a Context Cube setting" : m[1] === "approve" ? "Approving an invariant change" : m[1] === "reject" ? "Rejecting an invariant change" : "Putting an archived original file back";
-    const mode = String(input.permission_mode ?? "default");
-    if (mode === "bypassPermissions" || mode === "dontAsk") {
-      return {
-        exitCode: 2,
-        stderr: `${what} needs a person, and this session skips permission prompts. Ask the person to run it themselves (in Claude Code they can type: ! ${cmd.trim()}).`,
-      };
-    }
-    return {
-      exitCode: 0,
-      stdout: JSON.stringify({
-        hookSpecificOutput: {
-          hookEventName: "PreToolUse",
-          permissionDecision: "ask",
-          permissionDecisionReason: `${what} needs a person to confirm.`,
-        },
-      }),
-    };
+  if (m) return needsPerson(m[1].startsWith("config") ? "Changing a Context Cube setting" : PERSON_ONLY_WHAT[m[1]], cmd, input);
+  const target = deleteTarget(cmd);
+  if (target) {
+    const cube = loadCube(root);
+    const box = getBox(cube, target);
+    if (box && isRecordBox(root, cube, box)) return needsPerson(`Deleting ${box.id}, which holds a record (text moved from the original files, or a closed history entry),`, cmd, input);
   }
 });
 

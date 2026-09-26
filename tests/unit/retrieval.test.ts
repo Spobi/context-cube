@@ -87,9 +87,14 @@ describe("related and find", () => {
     expect(text).toContain("Invariants to read before editing it (Z1):");
     expect(text).toContain("Z1-invariants.md");
     expect(text).toContain("past records");
+    // Each one says how it was found, so the route can be checked.
+    expect(r.boxes[0].why).toEqual(["`clockHandshake` (line 1)"]);
+    expect(r.invariants[0].why).toEqual(["via Y03.X001"]);
+    expect(r.history[0].why).toEqual(["links to Y03.X001", "links to Y02.X001"]);
+    expect(text).toContain("- Y02.X001 sixty-second-clock [via Y03.X001]: ");
     // A folder and a code name route the same way.
-    expect(related(root, "src", root).boxes.map((b) => b.id)).toEqual(["Y03.X001"]);
-    expect(related(root, "clockHandshake", root).boxes.map((b) => b.id)).toEqual(["Y03.X001"]);
+    expect(related(root, "src", root).boxes.map((b) => [b.id, b.why])).toEqual([["Y03.X001", ["src/handshake.ts: `clockHandshake` (line 1)"]]]);
+    expect(related(root, "clockHandshake", root).boxes.map((b) => [b.id, b.why])).toEqual([["Y03.X001", ["names `clockHandshake` (in src/handshake.ts)"]]]);
     expect(renderRelated(related(root, "src/nothing.ts", root))).toMatch(/^The cube has nothing linked/);
   });
 

@@ -1,0 +1,51 @@
+{
+  "step": "history-summaries",
+  "tier": "haiku",
+  "output": {
+    "entries": [
+      {
+        "id": "Y01.X001",
+        "name": "audio-worker-thread-reverted",
+        "summary": "Moved audio decoding to a worker thread, then reverted it: it deadlocked the audio session whenever a call came in. Don't try this again without a lock-free queue.",
+        "readWhen": "Before changing audio decoding to use worker threads, or when audio session deadlocks during calls",
+        "touches": [
+          {
+            "to": "Y03",
+            "note": "moved decoding to worker thread, then reverted due to deadlock"
+          },
+          {
+            "to": "Y02.X001",
+            "note": "violated the main-thread invariant; proved why it matters"
+          }
+        ],
+        "projectWide": false
+      },
+      {
+        "id": "Y01.X002",
+        "name": "settings-dark-mode-toggle",
+        "summary": "The settings screen now has a dark mode toggle.",
+        "readWhen": "Before modifying the settings screen or adding theme-related features",
+        "touches": [
+          {
+            "to": "Y04",
+            "note": "added dark mode toggle"
+          }
+        ],
+        "projectWide": false
+      },
+      {
+        "id": "Y01.X003",
+        "name": "smaller-audio-buffers",
+        "summary": "Reduced audio buffer from 40 ms to 20 ms because people heard a delay on calls.",
+        "readWhen": "Before changing audio buffer sizes, or when investigating call latency",
+        "touches": [
+          {
+            "to": "Y03",
+            "note": "reduced buffer from 40 ms to 20 ms"
+          }
+        ],
+        "projectWide": false
+      }
+    ]
+  }
+}

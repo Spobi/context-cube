@@ -9,6 +9,7 @@ import { build } from "../commands/build";
 import { createBox } from "../core/ops";
 import { reindex } from "../core/index/index";
 import { installAgents } from "../core/install";
+import { compareVersions, installTool, readToolVersion, version } from "../core/tool";
 import { linkCode } from "../core/code/links";
 import { applyStatus, computeStatus } from "../core/code/status";
 import { scanCandidates } from "../core/build/scan";
@@ -192,13 +193,17 @@ async function handleOriginals(root: string, ask: Asker, allowed: boolean): Prom
 /** A cube is already here: bring it up to date instead of rebuilding (plan 7.1). */
 async function updateExisting(root: string, ask: Asker, opts: SetupOptions): Promise<string[]> {
   say(ask, "A cube already exists here.");
-  const ok = await ask.confirm("Update it (check which boxes are stale, refresh code links and indexes, and reinstall the hooks) instead of rebuilding?", true);
+  const theirs = readToolVersion(root);
+  const upgrade = theirs && compareVersions(version(), theirs) > 0 ? ` and update the project's copy of Context Cube from ${theirs} to ${version()}` : "";
+  const ok = await ask.confirm(`Update it (check which boxes are stale, refresh code links and indexes, and reinstall the hooks${upgrade}) instead of rebuilding?`, true);
   if (!ok) return [`Nothing changed. To rebuild from scratch: take the cube out of your agent and put your original files back (${TOOL_COMMAND} uninstall, then ${TOOL_COMMAND} restore --all), then move context-cube/ out of the way and run this again.`];
+  const tool = installTool(root);
   linkCodeForStale(root);
   const marked = applyStatus(root, computeStatus(root));
   await installAgents(root, undefined, { shared: opts.shared });
   const cube = loadCube(root);
   return [
+    ...(tool.updatedFrom ? [`Updated the project's copy of Context Cube from ${tool.updatedFrom} to ${version()}. Commit context-cube/ so teammates get it too.`] : []),
     `Updated: ${cube.rows.length} rows, ${allBoxes(cube).filter((b) => !b.isRoot).length} boxes${marked ? `; ${marked} box${marked === 1 ? " is" : "es are"} now marked stale or needs-review (see: ${TOOL_COMMAND} status)` : ""}.`,
     "Hooks, path rules, and the always-loaded block are current.",
   ];

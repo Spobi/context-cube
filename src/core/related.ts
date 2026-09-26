@@ -37,6 +37,8 @@ export interface RelatedBox {
   summary: string;
   path: string;
   date?: string;
+  /** How the cube got from the query to this box: the code it names, the commit, or the box it was reached through. */
+  why: string[];
 }
 
 export interface Related {
@@ -54,13 +56,20 @@ export interface Related {
   rules: RelatedBox[];
 }
 
-function entry(box: Box, drawer?: string): RelatedBox {
+function entry(box: Box, why: string[], drawer?: string): RelatedBox {
   return {
     id: box.id,
     name: box.name,
     summary: box.header?.summary ?? "",
     path: `${CUBE_DIR}/${box.relDir}/${drawer ?? ""}`,
+    why,
   };
+}
+
+function commitsWhy(hashes: string[]): string {
+  const shown = hashes.slice(0, 2).map((h) => h.slice(0, 7));
+  const more = hashes.length > 2 ? ` and ${hashes.length - 2} more` : "";
+  return `${hashes.length === 1 ? "commit" : "commits"} ${shown.join(", ")}${more} changed it`;
 }
 
 export function related(root: string, query: string, cwd = process.cwd(), cube: Cube = loadCube(root)): Related {
@@ -76,12 +85,26 @@ export function related(root: string, query: string, cwd = process.cwd(), cube: 
   }) || boxes.some((b) => (b.header?.paths ?? []).some((g) => globMatch(g, asPath)));
   out.kind = isPath ? "path" : "name";
 
-  const covers = (b: Box): boolean => {
-    const st = state.get(b.id);
-    if (out.kind === "path") return (st?.code?.files ?? []).some((f) => fileHit(f.path));
-    return (st?.names ?? []).includes(query) || (st?.code?.files ?? []).some((f) => f.why.includes(`\`${query}\``));
+  /** Why a box's own text points at the query, or undefined if it doesn't. */
+  const codeWhy = (b: Box): string | undefined => {
+    const files = state.get(b.id)?.code?.files ?? [];
+    if (out.kind === "path") {
+      const f = files.find((x) => fileHit(x.path));
+      if (!f) return undefined;
+      const why = f.why.replace("named in the text", "names the file");
+      return f.path === asPath ? why : `${f.path}: ${why}`;
+    }
+    const f = files.find((x) => x.why.includes(`\`${query}\``));
+    if (f) return `names \`${query}\` (in ${f.path})`;
+    return (state.get(b.id)?.names ?? []).includes(query) ? `names \`${query}\`` : undefined;
   };
 
+  const why = new Map<string, string[]>();
+  const because = (id: string, reason: string) => {
+    const list = why.get(id) ?? [];
+    if (!list.includes(reason)) list.push(reason);
+    why.set(id, list);
+  };
   const inv = new Map<string, Box>();
   const cand = new Map<string, Box>();
   const about: Box[] = [];
@@ -89,47 +112,63 @@ export function related(root: string, query: string, cwd = process.cwd(), cube: 
   for (const b of boxes) {
     const row = getRow(cube, b.rowNum)!;
     if (row.type === "rules") {
-      if (out.kind === "path" && (b.header?.paths ?? []).some((g) => globMatch(g, asPath))) out.rules.push(entry(b, "Z0-overview.md"));
+      const glob = out.kind === "path" ? (b.header?.paths ?? []).find((g) => globMatch(g, asPath)) : undefined;
+      if (glob) out.rules.push(entry(b, [`loads with ${glob}`], "Z0-overview.md"));
       continue;
     }
+    const code = codeWhy(b);
     if (row.type === "history") {
-      const st = state.get(b.id);
-      const touched = out.kind === "path" ? (st?.code?.commits ?? []).some((c) => c.files.some(fileHit)) || covers(b) : covers(b);
-      if (touched) hist.set(b.id, b);
+      const commits = out.kind === "path" ? (state.get(b.id)?.code?.commits ?? []).filter((c) => c.files.some(fileHit)).map((c) => c.hash) : [];
+      if (commits.length) because(b.id, commitsWhy(commits));
+      if (code) because(b.id, code);
+      if (commits.length || code) hist.set(b.id, b);
       continue;
     }
-    if (!covers(b)) continue;
+    if (!code) continue;
+    because(b.id, code);
     if (row.type === "invariants") (isCandidate(b) ? cand : inv).set(b.id, b);
     else about.push(b);
-    for (const i of invariantsFor(cube, b)) inv.set(i.id, i);
+    for (const i of invariantsFor(cube, b)) {
+      inv.set(i.id, i);
+      if (i.id !== b.id) because(i.id, `via ${b.id}`);
+    }
     for (const l of b.header?.links ?? []) {
       const t = getBox(cube, l.to);
-      if (t && isCandidate(t)) cand.set(t.id, t);
+      if (t && isCandidate(t)) {
+        cand.set(t.id, t);
+        because(t.id, `via ${b.id}`);
+      }
     }
   }
   // History entries that link to a box about it touched it too.
   const aboutIds = new Set([...about, ...inv.values()].map((b) => b.id));
   for (const b of boxes) {
     if (getRow(cube, b.rowNum)?.type !== "history") continue;
-    if ((b.header?.links ?? []).some((l) => aboutIds.has(getBox(cube, l.to)?.id ?? l.to))) hist.set(b.id, b);
+    for (const l of b.header?.links ?? []) {
+      const target = getBox(cube, l.to)?.id ?? l.to;
+      if (!aboutIds.has(target)) continue;
+      hist.set(b.id, b);
+      because(b.id, `links to ${target}`);
+    }
   }
-  out.invariants = [...inv.values()].map((b) => entry(b, "Z1-invariants.md"));
-  out.candidates = [...cand.values()].map((b) => entry(b, "Z1-invariants.md"));
-  out.boxes = about.map((b) => entry(b));
+  const reasons = (b: Box) => why.get(b.id) ?? [];
+  out.invariants = [...inv.values()].map((b) => entry(b, reasons(b), "Z1-invariants.md"));
+  out.candidates = [...cand.values()].map((b) => entry(b, reasons(b), "Z1-invariants.md"));
+  out.boxes = about.map((b) => entry(b, reasons(b)));
   out.history = [...hist.values()]
     .sort((a, b) => b.num - a.num)
-    .map((b) => ({ ...entry(b), date: state.get(b.id)?.date }));
+    .map((b) => ({ ...entry(b, reasons(b)), date: state.get(b.id)?.date }));
   return out;
 }
 
 export function renderRelated(r: Related, maxHistory = 8): string {
   const lines: string[] = [];
-  const line = (b: RelatedBox) => `- ${b.id} ${b.name}${b.date ? ` (${b.date})` : ""}: ${b.summary} → ${b.path}`;
+  const line = (b: RelatedBox) => `- ${b.id} ${b.name}${b.date ? ` (${b.date})` : ""}${b.why.length ? ` [${b.why.join("; ")}]` : ""}: ${b.summary} → ${b.path}`;
   const what = r.kind === "path" ? r.query : `\`${r.query}\``;
   if (!r.invariants.length && !r.boxes.length && !r.history.length && !r.candidates.length && !r.rules.length) {
     return `The cube has nothing linked to ${what}. To search its text: cube find "<words>"`;
   }
-  lines.push(`What the cube holds about ${what}:`);
+  lines.push(`What the cube holds about ${what} (in brackets: how each was found):`);
   if (r.invariants.length) lines.push("", "Invariants to read before editing it (Z1):", ...r.invariants.map(line));
   if (r.rules.length) lines.push("", "Rules for these files:", ...r.rules.map(line));
   if (r.boxes.length) lines.push("", "Boxes about it:", ...r.boxes.map(line));

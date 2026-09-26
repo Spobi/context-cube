@@ -132,6 +132,8 @@ export interface BoxState {
   approvedZ1?: string;
   /** Where migrated text came from, for the coverage proof. */
   sources?: { file: string; start: number; end: number; drawer: number; wrapped?: boolean }[];
+  /** Records a person replaced on purpose (`cube replace`), per drawer: when, and the checksum of the text they kept. */
+  replaced?: Record<string, { at: string; sha: string }>;
 }
 
 export function boxStatePath(root: string, id: string): string {

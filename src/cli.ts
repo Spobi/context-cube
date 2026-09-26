@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { version } from "./core/tool";
+import { olderThanProject, version } from "./core/tool";
 import { hookCommand, readStdin } from "./commands/hook";
 import { logInstall, logReport, logUninstall } from "./commands/log";
 import * as core from "./commands/core";
@@ -16,6 +16,8 @@ import { mergeFile } from "./core/merge";
 function run(fn: (...args: any[]) => unknown | Promise<unknown>) {
   return async (...args: any[]) => {
     try {
+      const older = olderThanProject(process.cwd());
+      if (older) throw new Error(older);
       const out = await fn(...args);
       if (Array.isArray(out)) console.log(out.join("\n"));
       else if (typeof out === "string") console.log(out);
@@ -112,8 +114,8 @@ export function buildProgram(): Command {
 
   program
     .command("delete <box>")
-    .description("Delete a box. Its number is retired and never reused.")
-    .option("--reason <text>", "why")
+    .description("Delete a box. Its number is retired and never reused. A box that holds a record needs a person and a reason.")
+    .option("--reason <text>", "why (required for a box that holds a record; goes in the approvals log)")
     .action(run((box, opts) => core.remove(box, opts)));
 
   program
@@ -194,8 +196,15 @@ export function buildProgram(): Command {
 
   program
     .command("write <id> <drawer> [text]")
-    .description("Write a drawer's text (Z0 body, Z3, Z4; Z1 outside the invariants row). Text, @file, or - for stdin.")
+    .description("Write a drawer's text (Z0 body, Z3, Z4; Z1 outside the invariants row). Text, @file, or - for stdin. Records (text moved from the original files, closed history entries) are added to with --append, never rewritten.")
+    .option("--append", "add the text below what's there, under a dated label")
     .action(run(async (id, drawer, text, opts) => living.write(id, drawer, text, opts, text === undefined || text === "-" ? await readStdin() : undefined)));
+
+  program
+    .command("replace <id> <drawer> [text]")
+    .description("For a person: replace a record's text on purpose (text, @file, or - for stdin). With no text, records the drawer's current text as a change made on purpose. Logged in the approvals log.")
+    .option("--reason <text>", "why (required; goes in the approvals log)")
+    .action(run(async (id, drawer, text, opts) => living.replace(id, drawer, text, opts, text === "-" ? await readStdin() : undefined)));
 
   program
     .command("edit <id>")

@@ -17,6 +17,7 @@ import { fixDuplicates } from "../core/check/fix";
 import { proposeNew, unapprovedChanges } from "../core/approvals";
 import { GITATTRIBUTES } from "../core/merge";
 import { find, related, renderFind, renderRelated } from "../core/related";
+import { deleteRecordBox, isRecordBox } from "../core/records";
 
 export function rootFor(cwd?: string): string {
   return findProjectRoot(cwd);
@@ -223,6 +224,14 @@ export async function remove(id: string, opts: { reason?: string; cwd?: string }
   const box = getBox(cube, id);
   if (box && getRow(cube, box.rowNum)?.type === "invariants" && loadConfig(root).invariants.approval === "required") {
     throw new CubeError(`${box.id} is an invariant. Deleting one needs a person's approval: ${TOOL_COMMAND} propose delete ${box.id} --reason "..."`);
+  }
+  if (box && isRecordBox(root, cube, box)) {
+    if (!opts.reason?.trim()) {
+      throw new CubeError(`${box.id} holds a record: text moved word for word from the original files, or a closed history entry. Deleting it takes it out of what agents can find, so a person decides, and says why: ${TOOL_COMMAND} delete ${box.id} --reason "<why>". If it's only out of date, add what changed instead: ${TOOL_COMMAND} write ${box.id} Z4 --append @<file>`);
+    }
+    const gone = deleteRecordBox(root, box.id, opts.reason);
+    await reindex(root);
+    return [`Deleted ${gone}. Its number is retired and won't be reused. Logged in context-cube/.state/approvals.log; git history still has its text.`];
   }
   const gone = deleteBox(root, id, opts.reason ?? "deleted");
   await reindex(root);

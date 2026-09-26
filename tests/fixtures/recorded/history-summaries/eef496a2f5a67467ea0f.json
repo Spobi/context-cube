@@ -1,0 +1,37 @@
+{
+  "step": "history-summaries",
+  "tier": "haiku",
+  "output": {
+    "entries": [
+      {
+        "id": "Y01.X001",
+        "name": "project-init",
+        "summary": "Initial commit setting up project structure, rules, and architectural decisions: chose Postgres for the database, adopted a no-ORM approach, and defined feature flags via config service. Created migration runner stub.",
+        "readWhen": "Before changing database migrations, ORM approach, or feature-flags design, or when understanding project architectural decisions",
+        "touches": [
+          {
+            "to": "Y00",
+            "note": "created HOUSERULES.md with project rules"
+          },
+          {
+            "to": "Y02",
+            "note": "established no-ORM invariant and architectural decision constraints"
+          },
+          {
+            "to": "Y03",
+            "note": "chose Postgres as the database system"
+          },
+          {
+            "to": "Y03.X001",
+            "note": "created src/db/migrate.ts as 2-line stub"
+          },
+          {
+            "to": "Y04",
+            "note": "established feature flags via config service per ADR 0002"
+          }
+        ],
+        "projectWide": false
+      }
+    ]
+  }
+}

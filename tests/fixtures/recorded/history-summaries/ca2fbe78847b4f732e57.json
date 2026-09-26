@@ -1,0 +1,104 @@
+{
+  "step": "history-summaries",
+  "tier": "haiku",
+  "output": {
+    "entries": [
+      {
+        "id": "Y01.X013",
+        "name": "export-option-13",
+        "summary": "Added export option 13 for report screen. Fixed empty report crash.",
+        "readWhen": "Before modifying report screen export functionality, or when empty report crashes",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X014",
+        "name": "export-option-14",
+        "summary": "Added export option 14 for report screen. Fixed empty report crash.",
+        "readWhen": "Before modifying report screen export functionality, or when empty report crashes",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X015",
+        "name": "export-option-15-with-shortcut",
+        "summary": "Added export option 15 and keyboard shortcut. Fixed empty report crash.",
+        "readWhen": "Before modifying report screen export options or shortcuts, or when empty report crashes",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X016",
+        "name": "export-option-16",
+        "summary": "Added export option 16 for report screen. Fixed empty report crash.",
+        "readWhen": "Before modifying report screen export functionality, or when empty report crashes",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X017",
+        "name": "export-option-17",
+        "summary": "Added export option 17 for report screen. Fixed empty report crash.",
+        "readWhen": "Before modifying report screen export functionality, or when empty report crashes",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X018",
+        "name": "export-option-18-with-shortcut",
+        "summary": "Added export option 18 and keyboard shortcut. Fixed empty report crash.",
+        "readWhen": "Before modifying report screen export options or shortcuts, or when empty report crashes",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X019",
+        "name": "export-option-19",
+        "summary": "Added export option 19 for report screen. Fixed empty report crash.",
+        "readWhen": "Before modifying report screen export functionality, or when empty report crashes",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X020",
+        "name": "export-option-20",
+        "summary": "Added export option 20 for report screen. Fixed empty report crash.",
+        "readWhen": "Before modifying report screen export functionality, or when empty report crashes",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X021",
+        "name": "export-option-21-with-shortcut",
+        "summary": "Added export option 21 and keyboard shortcut. Fixed empty report crash.",
+        "readWhen": "Before modifying report screen export options or shortcuts, or when empty report crashes",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X022",
+        "name": "export-option-22",
+        "summary": "Added export option 22 for report screen. Fixed empty report crash.",
+        "readWhen": "Before modifying report screen export functionality, or when empty report crashes",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X023",
+        "name": "export-option-23",
+        "summary": "Added export option 23 for report screen. Fixed empty report crash.",
+        "readWhen": "Before modifying report screen export functionality, or when empty report crashes",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X024",
+        "name": "export-option-24-with-shortcut",
+        "summary": "Added export option 24 and keyboard shortcut. Fixed empty report crash.",
+        "readWhen": "Before modifying report screen export options or shortcuts, or when empty report crashes",
+        "touches": [],
+        "projectWide": true
+      }
+    ]
+  }
+}

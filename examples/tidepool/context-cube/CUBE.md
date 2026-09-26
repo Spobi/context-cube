@@ -14,6 +14,7 @@ This folder is the project's memory: rules, history, invariants (rules that must
 7. To search the memory, use `node context-cube/.tool/cube.mjs find <words>`, not a search of the whole project.
 8. Create rows, boxes, and history entries only with cube commands (`node context-cube/.tool/cube.mjs <command>`). Never pick coordinates yourself.
 9. Never edit invariant text directly. Use `node context-cube/.tool/cube.mjs propose`.
+10. Text moved in from the project's original files, and closed history entries, are records: add to them with `node context-cube/.tool/cube.mjs write <id> Z4 --append`; never rewrite or shorten them.
 
 ## Layout
 
@@ -26,9 +27,9 @@ This folder is the project's memory: rules, history, invariants (rules that must
 ## Rows
 
 - Y00 rules: Instructions that always apply in this project. Every rule is loaded at the start of every session. Open when: Always. This row is loaded automatically, so there is nothing to open. (5 rules, ~668 tokens) → Y00-rules/ROW.md
-- Y01 history: What changed and why, one entry per day, newest first. Open when: Debugging, revisiting a decision, or changing something that was changed before. (4 entries, ~1,030 tokens) → Y01-history/ROW.md
-- Y02 invariants: Rules that must never be broken, by topic: what must hold, why, and what breaks otherwise. Open when: Before changing code that a box's Z2 lists, or anything the rules say needs the invariants. (4 topics, ~1,219 tokens) → Y02-invariants/ROW.md
-- Y03 sync-engine: The offline sync engine in src/sync: the offline edit queue that replays edits in order, tombstone retention for deletes, and how uploads and retries reach the server. Open when: Changing how queued edits replay, tombstone lifetime, upload batching, retry behavior, or any function in src/sync. (4 boxes, ~1,240 tokens) → Y03-sync-engine/ROW.md
+- Y01 history: What changed and why, one entry per day, newest first. Open when: Debugging, revisiting a decision, or changing something that was changed before. (4 entries, ~934 tokens) → Y01-history/ROW.md
+- Y02 invariants: Rules that must never be broken, by topic: what must hold, why, and what breaks otherwise. Open when: Before changing code that a box's Z2 lists, or anything the rules say needs the invariants. (4 topics, ~1,216 tokens) → Y02-invariants/ROW.md
+- Y03 sync-engine: The offline sync engine in src/sync: the offline edit queue that replays edits in order, tombstone retention for deletes, and how uploads and retries reach the server. Open when: Changing how queued edits replay, tombstone lifetime, upload batching, retry behavior, or any function in src/sync. (4 boxes, ~1,239 tokens) → Y03-sync-engine/ROW.md
 - Y04 testing: How the test suite is run and the known traps when writing tests, especially sync tests. Open when: Writing or fixing tests, setting up sync test fixtures, or debugging a test that passes locally but hides a real bug. (1 box, ~286 tokens) → Y04-testing/ROW.md
 
 ## Commands

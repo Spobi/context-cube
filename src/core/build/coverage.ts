@@ -52,7 +52,9 @@ export function placedCoverage(root: string, sources: string[]): PlacedCoverage[
       const wrapped = new Map<string, string>();
       for (const m of own.matchAll(FROM_RE)) wrapped.set(`${m[1]}|${m[2]}|${m[3]}`, m[4]);
       for (const s of list) {
-        const text = s.wrapped || list.length > 1 ? wrapped.get(`${s.file}|${s.start}|${s.end}`) : own;
+        // Markers win over the state's `wrapped` flag: appending to a record wraps its text, and a
+        // merge can keep the other side's state.
+        const text = wrapped.get(`${s.file}|${s.start}|${s.end}`) ?? (s.wrapped || list.length > 1 ? undefined : own);
         const arr = pieces.get(s.file) ?? [];
         arr.push({ box: box.id, drawer: z, start: s.start, end: s.end, text });
         pieces.set(s.file, arr);

@@ -2,6 +2,13 @@
 
 Thanks for helping. The most useful thing you can do is run Context Cube on your own project and tell us what broke.
 
+## The standard
+
+When two designs would both work, pick the one that serves this better: **the agent sees every fact that could change its decision, sees as little else as possible, and can prove how it got there.** Two rules follow from it:
+
+- Text moved in from a project's files, and closed history entries, are never rewritten by the tool or an agent. They can only be added to, with a date. AI may write routing text around them (names, summaries, read-when lines), but it doesn't change the text itself.
+- Plain files, links, and paths known to code beat a cleverer retrieval layer (embeddings, a database, a server) until `cube bench` shows otherwise.
+
 ## Setup
 
 ```sh

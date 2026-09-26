@@ -14,7 +14,7 @@ export const CUBE_FEATURES: HookFeature[] = ["guard", "session", "update"];
 
 /** Commands that must always ask a person (plan 9.3), and the archive, which the agent doesn't read. */
 export const PERSON_ONLY_RULES: PermissionRule[] = [
-  ...["config set", "approve", "reject", "restore"].map((c) => ({ rule: `Bash(${TOOL_COMMAND} ${c}:*)`, behavior: "ask" as const })),
+  ...["config set", "approve", "reject", "restore", "replace"].map((c) => ({ rule: `Bash(${TOOL_COMMAND} ${c}:*)`, behavior: "ask" as const })),
   { rule: "Read(/context-cube/.state/archive/**)", behavior: "deny" },
 ];
 
