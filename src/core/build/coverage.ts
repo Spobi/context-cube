@@ -60,7 +60,8 @@ export function pieceText(own: string, marked: Map<string, string>, s: SourcePie
   return own.startsWith(want) ? want : own;
 }
 
-export function placedCoverage(root: string, sources: string[]): PlacedCoverage[] {
+/** `textOf` checks against other text than the file's (say, the text a build read before the file changed). */
+export function placedCoverage(root: string, sources: string[], opts: { textOf?: (path: string) => string | undefined } = {}): PlacedCoverage[] {
   const cube = loadCube(root);
   const pieces = new Map<string, Piece[]>();
   for (const box of allBoxes(cube)) {
@@ -80,7 +81,7 @@ export function placedCoverage(root: string, sources: string[]): PlacedCoverage[
   }
   return sources.map((source) => {
     // An archived source is read from the archive (readSource).
-    const text = readSource(root, source);
+    const text = opts.textOf?.(source) ?? readSource(root, source);
     const lines = splitLines(text);
     const mine = (pieces.get(source) ?? []).sort((a, b) => a.start - b.start);
     const changed: PlacedCoverage["changed"] = [];

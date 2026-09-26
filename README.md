@@ -26,7 +26,7 @@ The setup:
 4. builds the cube in `context-cube/`, and proves every line of your original files landed in it, word for word;
 5. archives your original files (they move, unchanged, into a folder your agent doesn't read, since their content now lives in the cube; one command puts any back), asks before rewriting any of your rules, and finishes with a short summary of what happens from now on.
 
-If your plan hits a usage limit partway, run the same command again after it resets; the build picks up where it stopped. Run it again later on a project that already has a cube, and it offers to update it instead of rebuilding.
+If your plan hits a usage limit partway, run the same command again after it resets; the build picks up where it stopped. Keep working in the meantime: new entries added to a file since the build read it (a new history section, say) are brought in when it continues; any other change to a file leaves that file as the build read it, and out of the archive. Run it again later on a project that already has a cube, and it offers to update it instead of rebuilding.
 
 ### How much usage it takes, and running it overnight
 

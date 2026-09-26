@@ -1,6 +1,6 @@
 {
   "name": "context-cube",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Turn a project's AI memory files into a structured cube that coding agents read top-down: short summaries first, detail only when a task needs it.",
   "type": "module",
   "bin": {

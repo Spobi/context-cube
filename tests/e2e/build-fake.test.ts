@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { build } from "../../src/commands/build";
 import { FakeBackend } from "../../src/ai/backends";
@@ -10,6 +10,9 @@ import { placedCoverage } from "../../src/core/build/coverage";
 import { chronological } from "../../src/core/build/place";
 import { inferHistoryUnit } from "../../src/core/build/stages";
 import { loadRecipe } from "../../src/core/build/recipe";
+import { addedLines } from "../../src/core/build/catchup";
+import { splitGenerated } from "../../src/core/format/generated";
+import { archiveSources } from "../../src/core/archive";
 import { loadAliases, resolveAlias } from "../../src/core/state/state";
 import type { Chunk } from "../../src/core/build/split";
 import { commitAll, tempProject } from "../helpers";
@@ -215,5 +218,98 @@ describe("starting the big part later", () => {
 
   it("rejects a start time it can't read", async () => {
     await expect(build({ cwd: tempProject(files), ask: scriptedAsker({}), backend: new FakeBackend((c) => answer(c)), at: "tonight" })).rejects.toThrow(/isn't a time this understands/);
+  });
+});
+
+describe("a source that changed after the build read it", () => {
+  const limitedOnce = () => {
+    let limited = false;
+    return new FakeBackend((c) => {
+      if (c.step === "history-summaries" && !limited) {
+        limited = true;
+        return new Error("You've hit your session limit · resets 6:20pm (America/New_York)");
+      }
+      return answer(c);
+    });
+  };
+  const md = Object.keys(files).filter((p) => p.endsWith(".md"));
+  const edit = (root: string, path: string, f: (s: string) => string) => writeFileSync(join(root, path), f(readFileSync(join(root, path), "utf8")));
+
+  it("finds lines added to what was read, or says the text changed", () => {
+    expect(addedLines(["a", "", "c"], ["a", "", "x", "", "c"])).toEqual([false, false, true, true, false]);
+    expect(addedLines(["a", "b"], ["a", "c"])).toBeUndefined();
+    expect(addedLines(["a", "b", "c"], ["a", "c"])).toBeUndefined();
+  });
+
+  it("brings in new entries when a paused build resumes, and every file still recombines exactly", async () => {
+    const root = tempProject(files);
+    commitAll(root);
+    const backend = limitedOnce();
+    expect((await build({ cwd: root, ask: scriptedAsker({}, []), backend })).join("\n")).toContain("Paused");
+    // Meanwhile: a new history entry between two others, and a new invariant at the end.
+    edit(root, "HISTORY.md", (t) => t.replace("## 1.1 (1) — 2026-02-01", "## 1.1 (1b) — 2026-02-10\nA hotfix. Relies on §2.\n\n## 1.1 (1) — 2026-02-01"));
+    edit(root, "INVARIANTS.md", (t) => `${t}\n## §3 Safety\n- Never drop an edit.\n`);
+    const log: string[] = [];
+    expect(await build({ cwd: root, ask: scriptedAsker({}, log), backend })).toEqual([]);
+    const text = log.join("\n");
+    expect(text).toContain('HISTORY.md changed after the build read it: its new lines 6–8 ("1.1 (1b) — 2026-02-10") is now in the cube as Y01.X004, and the rest of the file moved down to match.');
+    expect(text).toContain('INVARIANTS.md changed after the build read it: its new lines 10–12 ("§3 Safety") is now in the cube as Y02.X003');
+    expect(placedCoverage(root, md).map((c) => [c.source, c.ok])).toEqual(md.map((p) => [p, true]));
+    const cube = loadCube(root);
+    expect(readDrawer(getBox(cube, "Y01.X004")!, 4)).toMatch(/^## 1\.1 \(1b\) — 2026-02-10\nA hotfix\. Relies on §2\.\n\n/);
+    expect(getBox(cube, "Y01.X004")!.header).toMatchObject({ summary: "Summary of Y01.X004.", written_by: "ai" }); // summarized like the rest
+    expect(readDrawer(getBox(cube, "Y02.X003")!, 1)).toBe("\n## §3 Safety\n- Never drop an edit.\n");
+    expect((await runChecks(root)).filter((i) => i.level === "error")).toEqual([]);
+    expect(archiveSources(root).archived.sort()).toEqual(["AGENTS.md", "DESIGN.md", "HISTORY.md", "INVARIANTS.md"]);
+  });
+
+  it("fits new text between an entry's closing blank lines, as when a section goes before the next part", async () => {
+    const withGap = { ...files, "HISTORY.md": files["HISTORY.md"].replace("See §2.\n\n", "See §2.\n\n\n") };
+    const root = tempProject(withGap);
+    commitAll(root);
+    const backend = limitedOnce();
+    await build({ cwd: root, ask: scriptedAsker({}, []), backend });
+    // Between the two blank lines that end "1.1 (2)", with a blank line of its own at the end.
+    edit(root, "HISTORY.md", (t) => t.replace("See §2.\n\n\n", "See §2.\n\n## 1.1 (3) — 2026-03-05\nNewest.\n\n\n"));
+    const log: string[] = [];
+    expect(await build({ cwd: root, ask: scriptedAsker({}, log), backend })).toEqual([]);
+    expect(log.join("\n")).toContain('its new lines 6–9 ("1.1 (3) — 2026-03-05") is now in the cube as Y01.X004');
+    const cube = loadCube(root);
+    // "1.1 (2)" keeps one closing blank line; the other now follows the new entry.
+    const own = (id: string) => splitGenerated(readDrawer(getBox(cube, id)!, 4)!).own;
+    expect(own("Y01.X003")).toBe("## 1.1 (2) — Faster sync\nSync got faster. See §2.\n\n");
+    expect(own("Y01.X004")).toBe("## 1.1 (3) — 2026-03-05\nNewest.\n\n\n");
+    expect(placedCoverage(root, ["HISTORY.md"])[0].ok).toBe(true);
+    expect((await runChecks(root)).filter((i) => i.level === "error")).toEqual([]);
+  });
+
+  it("catches up when the file changed between reading and placing (a build started later)", async () => {
+    const root = tempProject(files);
+    commitAll(root);
+    const backend = new FakeBackend((c) => answer(c));
+    await build({ cwd: root, ask: scriptedAsker({}, []), backend, stopAfter: "review" });
+    edit(root, "HISTORY.md", (t) => t.replace("# History\n\n", "# History\n\n## 1.2 (1) — 2026-03-01\nOffline mode.\n\n"));
+    const log: string[] = [];
+    await build({ cwd: root, ask: scriptedAsker({}, log), backend });
+    expect(log.join("\n")).toContain('its new lines 3–5 ("1.2 (1) — 2026-03-01") is now in the cube as Y01.X004');
+    expect(placedCoverage(root, md).every((c) => c.ok)).toBe(true);
+  });
+
+  it("keeps a file whose text was edited as the build read it, and leaves it in place", async () => {
+    const root = tempProject(files);
+    commitAll(root);
+    const backend = limitedOnce();
+    await build({ cwd: root, ask: scriptedAsker({}, []), backend });
+    edit(root, "HISTORY.md", (t) => t.replace("Server went live.", "Server went live in us-east."));
+    const log: string[] = [];
+    expect(await build({ cwd: root, ask: scriptedAsker({}, log), backend })).toEqual([]);
+    const text = log.join("\n");
+    expect(text).toContain("HISTORY.md changed after the build read it, and not only by new entries (text the build read was changed or removed, not only added to). The cube keeps it as the build read it, and it will stay where it is, not archived");
+    expect(text).toContain("Coverage: all 4 source files recombine exactly from the cube (");
+    expect(text).toContain("one as the build read it.");
+    const r = archiveSources(root);
+    expect(r.archived).not.toContain("HISTORY.md");
+    expect(r.skipped.map((x) => x.path)).toContain("HISTORY.md");
+    expect(readFileSync(join(root, "HISTORY.md"), "utf8")).toContain("Server went live in us-east.");
   });
 });

@@ -33,6 +33,7 @@ import { appendGlue, bulkCreate, chronological, effectiveDate, nameFor, sourceLa
 import { loadBoxState, saveBoxState } from "../state/state";
 import { placedCoverage } from "./coverage";
 import { buildDir, BuildStopped, loadChunks, type BuildContext, type BuildState, type Stage } from "./pipeline";
+import { catchUp, readText } from "./catchup";
 import type { Chunk } from "./split";
 import type { AICallLog } from "../../ai/runner";
 import type { Link } from "../format/header";
@@ -496,10 +497,32 @@ function enrichBatches(items: EnrichItem[], budget = 32_000, maxItems = 12): Enr
   return out;
 }
 
+/**
+ * Before the steps that read the placed cube: a source that changed since the
+ * build read it (the build paused, or waited until night, and work went on).
+ * New entries come in as boxes; any other change is noted, and that file is
+ * checked against what the build read and left in place, not archived.
+ */
+async function catchUpSources(ctx: BuildContext, state: BuildState): Promise<void> {
+  const { caught, drifted } = catchUp(ctx.root);
+  for (const c of caught) {
+    const where = c.ranges.map((r) => `lines ${r.start}–${r.end}${r.title ? ` ("${r.title.slice(0, 60)}")` : ""}`).join(", ");
+    ctx.ask.say(`\n${c.source} changed after the build read it: its new ${where} ${c.added.length === 1 ? "is" : "are"} now in the cube as ${c.added.join(", ")}, and the rest of the file moved down to match.`);
+  }
+  const known = new Set((state.drifted as { source: string }[] | undefined)?.map((d) => d.source) ?? []);
+  for (const d of drifted) {
+    if (known.has(d.source)) continue;
+    ctx.ask.say(`\n${d.source} changed after the build read it, and not only by new entries (${d.problem}). The cube keeps it as the build read it, and it will stay where it is, not archived, so nothing in it is hidden.`);
+  }
+  state.drifted = drifted;
+  if (caught.length) await reindex(ctx.root, { adapters: false });
+}
+
 async function enrich(ctx: BuildContext, state: BuildState) {
   const root = ctx.root;
   const placement = loadPlacement(root);
   if (!placement) return;
+  await catchUpSources(ctx, state);
   const progressPath = join(buildDir(root), "enrich.json");
   const done = readJsonOr<Record<string, true>>(progressPath, {});
   const parallel = loadConfig(root).ai.parallel;
@@ -637,16 +660,24 @@ async function backlinks(ctx: BuildContext, state: BuildState) {
 
 async function check(ctx: BuildContext, state: BuildState) {
   const root = ctx.root;
+  if (loadPlacement(root)) {
+    await catchUpSources(ctx, state);
+    // New boxes made just now get their summaries too (nothing else is left to summarize).
+    await enrich(ctx, state);
+  }
   const recipe = loadRecipe(root);
   const sources = recipe?.sources.map((s) => s.path) ?? [];
-  const cov = placedCoverage(root, sources);
+  // A file that changed in a way the build couldn't bring in is checked against the text it read.
+  const drifted = new Set(((state.drifted as { source: string }[] | undefined) ?? []).map((d) => d.source));
+  const { chunks } = loadChunks(root);
+  const cov = placedCoverage(root, sources, { textOf: (p) => (drifted.has(p) ? readText(chunks, p) : undefined) });
   const bad = cov.filter((c) => !c.ok);
   state.coverage = { sources: cov.length, ok: cov.length - bad.length };
   if (bad.length) {
     for (const b of bad) ctx.ask.say(`  coverage problem in ${b.source}: ${b.problem}`);
     throw new Error("Coverage failed: some source text didn't land in the cube exactly. Nothing was lost from your original files; see the problems above.");
   }
-  ctx.ask.say(`\nCoverage: all ${cov.length} source file${cov.length === 1 ? "" : "s"} recombine exactly from the cube (${fmtInt(cov.reduce((n, c) => n + c.lines, 0))} lines).`);
+  ctx.ask.say(`\nCoverage: all ${cov.length} source file${cov.length === 1 ? "" : "s"} recombine exactly from the cube (${fmtInt(cov.reduce((n, c) => n + c.lines, 0))} lines)${drifted.size ? `, ${drifted.size === 1 ? "one" : drifted.size} as the build read ${drifted.size === 1 ? "it" : "them"}` : ""}.`);
   const issues = await runChecks(root);
   const errors = issues.filter((i) => i.level === "error");
   state.checkErrors = errors.length;
@@ -713,7 +744,10 @@ async function install(ctx: BuildContext, state: BuildState) {
   const total = [...bySteps.values()].reduce((n, s) => n + s.in + s.out, 0);
   ctx.ask.say("");
   ctx.ask.say(`Done. The cube has ${cube.rows.length} rows and ${fmtInt(allBoxes(cube).filter((b) => !b.isRoot).length)} boxes: context-cube/CUBE.md`);
-  if (state.coverage) ctx.ask.say(`Every line of your ${(state.coverage as any).sources} source files is in the cube, word for word. Your original files weren't changed.`);
+  const drifted = ((state.drifted as { source: string }[] | undefined) ?? []).map((d) => d.source);
+  if (state.coverage) {
+    ctx.ask.say(`Every line of your ${(state.coverage as any).sources} source files is in the cube, word for word${drifted.length ? ` (${drifted.join(", ")} as the build read ${drifted.length === 1 ? "it" : "them"}, before ${drifted.length === 1 ? "it was" : "they were"} changed)` : ""}. Your original files weren't changed.`);
+  }
   if (total) {
     const models = TIER_ORDER.filter((t) => byTier.get(t)).map((t) => `${TIER_NAME[t]} ${fmtInt(byTier.get(t)!)}`);
     ctx.ask.say(`AI tokens used by this build: ${fmtInt(total)}, by model: ${models.join(", ")}.`);
