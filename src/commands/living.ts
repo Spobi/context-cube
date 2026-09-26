@@ -74,9 +74,9 @@ export async function write(id: string, drawer: string, text: string | undefined
   if (opts.append) {
     if (z === 0) throw new CubeError(`--append adds to Z1, Z3, or Z4. Z0 is the box's overview: change its summary or read-when line with ${TOOL_COMMAND} edit ${box.id}, and put detail in Z4.`);
     if (box.header?.status === "open") throw new CubeError(`${box.id} is the open history entry. Add to it with: ${TOOL_COMMAND} history add "<note>"`);
-    appendToDrawer(r, box.id, z, body);
+    const warning = appendToDrawer(r, box.id, z, body);
     await reindex(r);
-    return [`Added to ${box.id}.Z${z}, dated, below what was there.`];
+    return [`Added to ${box.id}.Z${z}, dated, below what was there.`, ...(warning ? [`Note: ${warning}`] : [])];
   }
   const rec = drawerRecord(r, cube, box, z);
   if (rec) throw new CubeError(recordRefusal(rec));
@@ -92,10 +92,11 @@ export async function replace(id: string, drawer: string, text: string | undefin
   const r = root(opts.cwd);
   const z = drawerNum(drawer);
   const body = text === undefined ? undefined : readBody(text, stdin) ?? "";
-  const rec = replaceRecord(r, id, z, body, opts.reason ?? "");
+  const { rec, kept } = replaceRecord(r, id, z, body, opts.reason ?? "");
   await reindex(r);
   const what = `${rec.box.id}.Z${z}`;
-  return [body === undefined ? `Recorded ${what}'s current text as a change a person made on purpose. Logged in context-cube/.state/approvals.log.` : `Replaced ${what}. Logged in context-cube/.state/approvals.log.`];
+  if (body === undefined) return [`Recorded ${what}'s current text as a change a person made on purpose. Logged in context-cube/.state/approvals.log.`];
+  return [`Replaced ${what}. Logged in context-cube/.state/approvals.log.${kept ? ` The text it held is kept in ${kept} (in the archive, which Claude doesn't read).` : ""}`];
 }
 
 export async function edit(id: string, opts: { summary?: string; readWhen?: string; scope?: string; status?: string; paths?: string; cwd?: string }): Promise<string[]> {

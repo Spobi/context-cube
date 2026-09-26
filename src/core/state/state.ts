@@ -132,8 +132,34 @@ export interface BoxState {
   approvedZ1?: string;
   /** Where migrated text came from, for the coverage proof. */
   sources?: { file: string; start: number; end: number; drawer: number; wrapped?: boolean }[];
-  /** Records a person replaced on purpose (`cube replace`), per drawer: when, and the checksum of the text they kept. */
+  /** Records (text kept as written), per drawer. A drawer is a record because it's listed here, wherever the box moves. */
+  records?: Record<string, RecordMark>;
+  /** Written by 0.2.0 for records a person replaced; read once and turned into `records`. */
   replaced?: Record<string, { at: string; sha: string }>;
+}
+
+/**
+ * The text kept as a record: the drawer's own text must still start with it.
+ * What follows it is dated notes added later, so adding a note never changes
+ * the mark, and only a person's `cube replace` moves it.
+ */
+export interface RecordMark {
+  sha: string;
+  /** Length of the kept text (JavaScript string length). */
+  chars: number;
+  /** When it became a record, or when a person last replaced it. */
+  at: string;
+  /** A person replaced it on purpose (`cube replace`). */
+  replaced?: boolean;
+}
+
+export function recordMark(text: string, at: string, replaced?: boolean): RecordMark {
+  return { sha: sha(text), chars: text.length, at, ...(replaced ? { replaced } : {}) };
+}
+
+/** Whether a drawer's own text still starts with its record's kept text. */
+export function recordIntact(own: string, mark: RecordMark): boolean {
+  return own.length >= mark.chars && sha(own.slice(0, mark.chars)) === mark.sha;
 }
 
 export function boxStatePath(root: string, id: string): string {

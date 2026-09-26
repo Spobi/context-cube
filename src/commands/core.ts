@@ -229,9 +229,9 @@ export async function remove(id: string, opts: { reason?: string; cwd?: string }
     if (!opts.reason?.trim()) {
       throw new CubeError(`${box.id} holds a record: text moved word for word from the original files, or a closed history entry. Deleting it takes it out of what agents can find, so a person decides, and says why: ${TOOL_COMMAND} delete ${box.id} --reason "<why>". If it's only out of date, add what changed instead: ${TOOL_COMMAND} write ${box.id} Z4 --append @<file>`);
     }
-    const gone = deleteRecordBox(root, box.id, opts.reason);
+    const { id: gone, kept } = deleteRecordBox(root, box.id, opts.reason);
     await reindex(root);
-    return [`Deleted ${gone}. Its number is retired and won't be reused. Logged in context-cube/.state/approvals.log; git history still has its text.`];
+    return [`Deleted ${gone}. Its number is retired and won't be reused. Logged in context-cube/.state/approvals.log. A copy of its folder is kept in ${kept}/ (in the archive, which Claude doesn't read); a person can bring its text back from there.`];
   }
   const gone = deleteBox(root, id, opts.reason ?? "deleted");
   await reindex(root);

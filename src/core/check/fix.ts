@@ -9,6 +9,7 @@ import { rewriteInlineRefs } from "../format/links";
 import { nextBoxNum, nextRowNum, touchState } from "../ops";
 import { addAliases, loadBoxState, saveBoxState } from "../state/state";
 import { cubePaths } from "../paths";
+import { dropForeignMarks } from "../records";
 
 /** When a folder was first added to git (seconds), or its mtime without git. */
 function createdAt(root: string, dir: string): number {
@@ -33,6 +34,8 @@ function createdAt(root: string, dir: string): number {
  */
 export function fixDuplicates(root: string): string[] {
   const out: string[] = [];
+  // Boxes that shared a state file with another box: their record marks are checked afterwards.
+  const shared = new Set<string>();
   let cube = loadCube(root);
 
   // Rows first.
@@ -55,6 +58,7 @@ export function fixDuplicates(root: string): string[] {
         moveStateFile(root, b.id, newId, b.name);
       }
       rewriteByName(root, mapping);
+      for (const b of moved.allBoxes) shared.add(boxId(row.num, b.num, row.width)).add(boxId(num, b.num, moved.width));
       addAliases(root, [{ alias: `${row.id} ${row.name}`, target: rowId(num) }]);
       out.push(`Row ${row.id} ${row.name} was a duplicate number; it is now ${rowId(num)}.`);
     }
@@ -80,10 +84,12 @@ export function fixDuplicates(root: string): string[] {
         rewriteByName(root, new Map([[`${b.name}@${b.id}`, newId]]));
         addAliases(root, [{ alias: `${b.id} ${b.name}`, target: newId }]);
         touchState(root, newId, newDir);
+        shared.add(b.id).add(newId);
         out.push(`${b.id} ${b.name} was a duplicate number; it is now ${newId}.`);
       }
     }
   }
+  for (const id of shared) dropForeignMarks(root, id);
   return out;
 }
 

@@ -8,10 +8,10 @@ import { reindex } from "../../src/core/index/index";
 import { installAgents } from "../../src/core/install";
 import { getBox, loadCube, readDrawer } from "../../src/core/cube";
 import { runChecks } from "../../src/core/check/check";
-import { addFragment, openEntry } from "../../src/core/history";
+import { addFragment, closeEntry, openEntry } from "../../src/core/history";
 import { loadAliases, loadBoxState } from "../../src/core/state/state";
 import { approve, listProposals, proposeEdit, unapprovedChanges } from "../../src/core/approvals";
-import { edit } from "../../src/commands/living";
+import { edit, replace, write } from "../../src/commands/living";
 import { FIXED_GIT_ENV, tempProject } from "../helpers";
 
 function g(root: string, args: string[], date = FIXED_GIT_ENV.GIT_AUTHOR_DATE) {
@@ -130,5 +130,77 @@ describe("teams sharing a repo", () => {
     // Both sides' bookkeeping survives: Alice's approval and Bob's header change.
     expect(unapprovedChanges(root)).toEqual([]);
     expect(loadBoxState(root, inv.id)!.approvedZ1).toBeDefined();
+  });
+
+  it("merges a person's correction to a record on one branch with a note added on another, and two notes added at once, with no false warnings", async () => {
+    const root = await teamRepo();
+    addFragment(root, "Tried a worker thread for the ring timer.", { key: "2.0 (1)", by: "Jordan" });
+    addFragment(root, "It deadlocked the audio session.", { key: "2.0 (1)", by: "Jordan" });
+    addFragment(root, "Don't retry it without a lock-free queue.", { key: "2.0 (1)", by: "Jordan" });
+    closeEntry(root, {});
+    await reindex(root);
+    g(root, ["add", "-A"]);
+    g(root, ["commit", "-q", "-m", "entry"]);
+    const recordWarnings = async () => (await runChecks(root)).filter((i) => i.code.startsWith("record-"));
+    const merge = (branch: string) => spawnSync("git", ["-c", "commit.gpgsign=false", "merge", "--no-edit", branch], { cwd: root, encoding: "utf8", env: { ...process.env, ...FIXED_GIT_ENV } });
+
+    // Alice corrects the first line, on purpose (a person's replace).
+    g(root, ["checkout", "-q", "-b", "alice"]);
+    const z4 = () => readDrawer(getBox(loadCube(root), "Y01.X001")!, 4)!;
+    const own = z4().split("<!-- cube:generated:start -->")[0].replace(/\n$/, "");
+    await replace("Y01.X001", "Z4", own.replace("ring timer", "ring timer and the dial tone"), { cwd: root, reason: "it covered the dial tone too" });
+    g(root, ["add", "-A"]);
+    g(root, ["commit", "-q", "-m", "alice: correct"], "2026-02-01T10:00:00Z");
+    // Bob, later, adds a note on his branch.
+    g(root, ["checkout", "-q", "main"]);
+    g(root, ["checkout", "-q", "-b", "bob"]);
+    await new Promise((r) => setTimeout(r, 20));
+    await write("Y01.X001", "Z4", "A lock-free queue landed in 2.3; see Y03.X001.", { cwd: root, append: true });
+    g(root, ["add", "-A"]);
+    g(root, ["commit", "-q", "-m", "bob: note"], "2026-02-02T10:00:00Z");
+    g(root, ["checkout", "-q", "alice"]);
+    let out = merge("bob");
+    expect(out.status, out.stdout + out.stderr).toBe(0);
+    expect(z4()).toContain("ring timer and the dial tone");
+    expect(z4()).toContain("A lock-free queue landed in 2.3");
+    expect(await recordWarnings()).toEqual([]);
+
+    // Carol and Dave each add a note from the same point: both notes are kept, without a conflict.
+    g(root, ["checkout", "-q", "-b", "carol"]);
+    await write("Y01.X001", "Z4", "Carol: the dial tone part was reverted in 2.4.", { cwd: root, append: true });
+    g(root, ["add", "-A"]);
+    g(root, ["commit", "-q", "-m", "carol: note"], "2026-02-03T10:00:00Z");
+    g(root, ["checkout", "-q", "alice"]);
+    g(root, ["checkout", "-q", "-b", "dave"]);
+    await write("Y01.X001", "Z4", "Dave: the queue is in src/audio/queue.ts.", { cwd: root, append: true });
+    g(root, ["add", "-A"]);
+    g(root, ["commit", "-q", "-m", "dave: note"], "2026-02-04T10:00:00Z");
+    out = merge("carol");
+    expect(out.status, out.stdout + out.stderr).toBe(0);
+    expect(z4()).not.toContain("<<<<<<<");
+    expect(z4().indexOf("Dave:")).toBeGreaterThan(z4().indexOf("A lock-free queue"));
+    expect(z4()).toContain("Carol: the dial tone part was reverted");
+    expect(await recordWarnings()).toEqual([]);
+  });
+
+  it("gives each of two history entries closed on two branches (one number, after the merge two) its own mark", async () => {
+    const root = await teamRepo();
+    const closeOne = async (branch: string, text: string, date: string) => {
+      g(root, ["checkout", "-q", "main"]);
+      g(root, ["checkout", "-q", "-b", branch]);
+      addFragment(root, text, { key: `3.0 (${branch})`, by: branch });
+      closeEntry(root, {});
+      await reindex(root);
+      g(root, ["add", "-A"]);
+      g(root, ["commit", "-q", "-m", `${branch}: entry`], date);
+    };
+    await closeOne("erin", "Erin moved the ring timer to the server.", "2026-02-01T10:00:00Z");
+    await closeOne("finn", "Finn made voicemail work offline.", "2026-02-02T10:00:00Z");
+    const out = spawnSync("git", ["-c", "commit.gpgsign=false", "merge", "--no-edit", "erin"], { cwd: root, encoding: "utf8", env: { ...process.env, ...FIXED_GIT_ENV } });
+    expect(out.status, out.stdout + out.stderr).toBe(0);
+    const entries = loadCube(root).rows.find((r) => r.type === "history")!.boxes;
+    expect(entries).toHaveLength(2);
+    for (const e of entries) expect(loadBoxState(root, e.id)!.records!.Z4.chars).toBe(readDrawer(e, 4)!.split("\n<!-- cube:generated:start -->")[0].length);
+    expect((await runChecks(root)).filter((i) => i.code.startsWith("record-"))).toEqual([]);
   });
 });

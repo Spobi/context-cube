@@ -2,7 +2,7 @@ import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { exists, isDir, normalizeEol, readTextOr } from "../fsutil";
 import { absPath } from "../scan";
-import { cubePaths } from "../paths";
+import { cubePaths, KEPT_RECORDS_DIR } from "../paths";
 import { splitLines } from "./markdown";
 import { firstLines, linesAt, outline, type Candidate } from "./scan";
 import type { Classified } from "./classify";
@@ -32,13 +32,14 @@ export function isArchived(root: string, path: string): boolean {
   return exists(archivePath(root, path));
 }
 
-/** Every archived source, as project-relative paths. */
+/** Every archived source, as project-relative paths (not the kept records). */
 export function listArchived(root: string): string[] {
   const base = cubePaths(root).archive;
   const out: string[] = [];
   const walk = (dir: string, rel: string) => {
     for (const e of readdirSync(dir, { withFileTypes: true })) {
       const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory() && r === KEPT_RECORDS_DIR) continue;
       if (e.isDirectory()) walk(join(dir, e.name), r);
       else if (e.isFile()) out.push(r);
     }

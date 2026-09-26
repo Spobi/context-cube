@@ -10,7 +10,7 @@ import { addFragment, closeEntry, openEntry } from "../../src/core/history";
 import { approve, listProposals, proposeDelete, proposeEdit, proposeNew, reject, unapprovedChanges, weakens } from "../../src/core/approvals";
 import { approveText } from "../../src/core/approvals";
 import { handleHook } from "../../src/commands/hook";
-import "../../src/hooks/handlers";
+import { deleteTargets } from "../../src/hooks/handlers";
 import { installAgents, uninstallAgents } from "../../src/core/install";
 import { linkCode } from "../../src/core/code/links";
 import { readJsonl } from "../../src/core/fsutil";
@@ -55,6 +55,12 @@ describe("open history entries and fragments", () => {
 
     const done = closeEntry(root, { summary: "Build 1.0.9 (2): started." });
     expect(done.header).toMatchObject({ status: "ok", summary: "Build 1.0.9 (2): started." });
+
+    // Several fragments by one person in the same minute stay in the order they were written.
+    const now = new Date("2026-09-25T10:00:00Z");
+    for (const t of ["First.", "Second.", "Third."]) addFragment(root, t, { key: "1.0.9 (3)", by: "Jordan", now });
+    expect(readdirSync(join(openEntry(loadCube(root))!.dir, "fragments"))).toEqual(["2026-09-25T1000-jordan.md", "2026-09-25T1000.02-jordan.md", "2026-09-25T1000.03-jordan.md"]);
+    expect(readDrawer(closeEntry(root, {}), 4)).toBe("First.\n\nSecond.\n\nThird.\n");
   });
 });
 
@@ -180,6 +186,22 @@ describe("records in the guard hook", () => {
     // Deleting a box that holds no record doesn't ask.
     createBox(root, 0, { name: "scratch-rule", summary: "A rule written here.", readWhen: "Always.", body: "Keep it short.\n" });
     expect((await pre(root, "Bash", { command: cmd("delete Y00.X001") })).stdout).toBeUndefined();
+    // Every delete in the command counts, and a --reason that names another box doesn't hide the target.
+    expect(await ask(`delete Y00.X001 && ${cmd("delete Y01.X001 --reason old")}`)).toMatchObject({ permissionDecision: "ask", permissionDecisionReason: expect.stringContaining("Deleting Y01.X001, which holds a record") });
+    expect((await ask('delete --reason "Duplicate of Y00.X001" Y01.X001')).permissionDecision).toBe("ask");
+    expect((await ask("delete --reason 'old; see Y00.X001 & more' Y01.X001")).permissionDecision).toBe("ask");
+    expect((await pre(root, "Bash", { command: `sh -c "${cmd("delete Y01.X001 --reason old")}"` })).stdout).toContain('"ask"');
+    // A box named through a variable may be a record: ask.
+    expect((await pre(root, "Bash", { command: `ID=Y00.X001; ${cmd('delete "$ID"')}` })).stdout).toContain("named through a shell variable");
+    expect((await pre(root, "Bash", { command: `${cmd("delete Y00.X001")}; echo 'delete Y01.X001'` })).stdout).toBeUndefined();
+  });
+
+  it("finds each cube delete's box in a shell command", () => {
+    const c = "node context-cube/.tool/cube.mjs";
+    expect(deleteTargets(`${c} delete Y03.X002 && ${c} delete --reason "dup of Y00.X001; old" Y01.X001`)).toEqual({ ids: ["Y03.X002", "Y01.X001"], unknown: false });
+    expect(deleteTargets(`cube delete --reason=why Y01.X001 | tee log`)).toEqual({ ids: ["Y01.X001"], unknown: false });
+    expect(deleteTargets(`npx context-cube delete $(cat id.txt) --reason x`)).toEqual({ ids: [], unknown: true });
+    expect(deleteTargets(`${c} find delete`)).toEqual({ ids: [], unknown: false });
   });
 });
 
@@ -198,6 +220,9 @@ describe("the update trigger", () => {
     expect(ctx).toContain("cube-updater");
     expect(ctx).toContain("never rewrite or shorten what's there");
     expect(ctx).toContain("write Y02.X001 Z4 @<file> (it has no Z4 yet");
+    // One `ok` for every box at the end: each one re-reads the project's code.
+    expect(ctx).toContain("- Then mark them checked, all in one command (it reads the code once): node context-cube/.tool/cube.mjs ok Y02.X001");
+    expect(ctx.match(/ ok Y02\.X001/g)).toHaveLength(1);
     expect((await post(root, "git commit -m again")).stdout).toBeUndefined();
     // A commit that only changed the cube needs no update.
     writeFileSync(join(root, "context-cube/Y02-invariants/X001-sixty-second-clock/Z4-detail.md"), "detail\n");

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { ensureDir, exists, isDir, readTextOr, remove, writeText } from "./fsutil";
 import { getBox, loadCube, readDrawer, type Box, type Cube, type Row } from "./cube";
 import { bulkUpdateHeaders, createBox, CubeError, oneLine, touchState } from "./ops";
-import { addAliases, loadBoxState, saveBoxState } from "./state/state";
+import { addAliases, loadBoxState, recordMark, saveBoxState } from "./state/state";
 import { gitUser } from "./git";
 import { slugify } from "./format/names";
 import { splitGenerated } from "./format/generated";
@@ -117,8 +117,9 @@ export function addFragment(root: string, text: string, opts: AddOptions = {}): 
   const box = getBox(cube, open.id)!;
   const dir = fragmentsDir(box);
   ensureDir(dir);
+  // A second fragment in the same minute gets ".02" after the time, so it still sorts after the first.
   let file = `${stamp(opts.now)}-${person(root, opts.by)}.md`;
-  for (let i = 2; exists(join(dir, file)); i++) file = `${stamp(opts.now)}-${person(root, opts.by)}-${i}.md`;
+  for (let i = 2; exists(join(dir, file)); i++) file = `${stamp(opts.now)}.${String(i).padStart(2, "0")}-${person(root, opts.by)}.md`;
   writeText(join(dir, file), text.endsWith("\n") ? text : `${text}\n`);
   if (opts.touches?.length) bulkUpdateHeaders(root, new Map([[box.id, { addLinks: opts.touches }]]));
   return { box, file, closed };
@@ -160,7 +161,12 @@ export function closeEntry(root: string, opts: CloseOptions): Box {
       ],
     ]),
   );
-  touchState(root, open.id, getBox(loadCube(root), open.id)!.dir);
+  const st = touchState(root, open.id, getBox(loadCube(root), open.id)!.dir);
+  // Closing makes its Z4 a record, kept as written from now on (core/records.ts).
+  if (combined.trim()) {
+    st.records = { ...(st.records ?? {}), Z4: recordMark(combined, new Date().toISOString()) };
+    saveBoxState(root, st);
+  }
   return getBox(loadCube(root), open.id)!;
 }
 

@@ -34,12 +34,13 @@ context-cube/
       Z0-overview.md
       fragments/             additions to an open history entry, one file each
   .state/                    tool-owned, committed
-    boxes/Y05.X003.json      per box: checksums, code fingerprints, sources, records a person replaced
+    boxes/Y05.X003.json      per box: checksums, code fingerprints, sources, record marks
     retired.txt              id<TAB>date<TAB>reason, one per line
     aliases.txt              alias<TAB>coordinate, one per line
     approvals.log            one JSON line per invariant change, and per record a person replaced or deleted
     pending/                 proposed invariant edits awaiting approval
     archive/                 original source files, moved here word for word once the cube holds them
+      .records/              records a person deleted (deleted/<id>-<name>/) or replaced (replaced/<id>/Z4-<time>.md)
   .tool/cube.mjs             the tool itself, so hooks and agents can run it; its second line declares its version
   .logs/                     per person, not committed
   .ignore                    keeps .state/, .tool/, and .logs/ out of ripgrep-based code searches
@@ -123,9 +124,10 @@ Text moved from existing files is kept word for word: history entries in Z4, inv
 
 Migrated text, and the Z4 of every closed history entry, are **records**: what was actually written, including old details a summary would drop (why an approach failed, what not to try again). Invariant Z1 is handled by its own approval flow instead.
 
-- A record is never rewritten by an agent. Additions go below it under a dated label, `**Added YYYY-MM-DD:**`, and before any generated section. Adding to migrated text stored bare first wraps it in `cube:from` markers, so coverage still finds it word for word; a tool finds a piece by its markers first, whatever the state says.
-- A person may replace a record on purpose, or delete a box that holds one. Each is logged in `.state/approvals.log` (`kind` `replace-record` or `delete-record`, with who, when, why, and the source lines). A replaced drawer is recorded in its box's state as `replaced: {"Z4": {"at": …, "sha": …}}`, the checksum of the text the person kept.
-- A check compares each migrated piece with its archived original and reports one that no longer matches, unless its drawer's text still has the checksum a person recorded. It also reports a box that held migrated text whose folder is gone though its state remains (removed without the tool). Sources that aren't archived aren't compared, since their files may have changed.
+- Each record drawer has a **mark** in its box's state: `records: {"Z4": {"sha": …, "chars": …, "at": …}}`, the checksum and length of the text kept as the record. The drawer's own text must start with that text. A drawer is a record because it has a mark, so it stays one when its box moves to another row or its file goes missing. A tool gives a drawer its mark when it becomes a record: when migrated text is placed, and when a history entry closes.
+- A record is never rewritten by an agent. Additions go below it under a dated label, `**Added YYYY-MM-DD:**`, and before any generated section. Adding changes nothing above the label, and leaves the mark alone. A migrated piece stored bare, as its drawer's only piece, is found at the start of the drawer; a piece wrapped in `cube:from` markers is found by its markers, whatever the state says. Where a later note disagrees with the text above it, the latest note is current.
+- A person may replace a record on purpose, or delete a box that holds one. Each is logged in `.state/approvals.log` (`kind` `replace-record` or `delete-record`, with who, when, why, the source lines, and `kept`). The text taken out is kept first: a replaced drawer's text in `.state/archive/.records/replaced/<id>/Z<n>-<time>.md`, a deleted box's folder (with its state as `box-state.json`) in `.state/archive/.records/deleted/<id>-<name>/`. A replacement gives the drawer a new mark with `"replaced": true`.
+- A check reports a record whose kept text is no longer at the start of its drawer, a record drawer whose file is gone, and a box that held a record whose folder is gone though its state remains (removed without the tool). It also compares each migrated piece from an archived source with the archive, unless a person replaced the drawer. Sources that aren't archived aren't compared, since their files may have changed.
 - An agent adapter should block direct edits of a record's file and ask a person before a replacement or a deletion.
 
 ## Archived sources
@@ -134,11 +136,12 @@ Once a cube holds a source file's text word for word, the original may be archiv
 
 - A tool reading a source reads `.state/archive/<path>` when it exists, and otherwise the file in place without the placeholder and the always-loaded block. So coverage and rebuilds see the same text before and after archiving.
 - Agents don't read the archive: `.ignore` keeps it out of code search, and an agent adapter should deny reading it.
+- The archive's `.records/` folder isn't a source file's path: it holds records a person replaced or deleted (see Records), and a tool doesn't list or restore it as a source.
 - Restoring moves the original back (keeping the always-loaded block) and removes it from the archive. Text found in a placeholder file outside its markers was added after archiving and isn't in the cube; a tool reports it and doesn't overwrite it.
 
 ## Open history entries
 
-One history entry at a time has `status: open`. Additions go in its `fragments/` folder, one file each, named by time and person (`2026-09-24T1512-jordan.md`), so two people never edit the same file. The open entry's Z4 is a generated section built from its fragments; closing the entry makes them its Z4 for good.
+One history entry at a time has `status: open`. Additions go in its `fragments/` folder, one file each, named by time and person (`2026-09-24T1512-jordan.md`; a second one in the same minute, `2026-09-24T1512.02-jordan.md`), so two people never edit the same file, and the names sort in the order they were written. The open entry's Z4 is a generated section built from its fragments; closing the entry makes them its Z4 for good.
 
 ## Invariant changes
 
@@ -146,7 +149,7 @@ Edits and deletions of approved invariant text wait in `.state/pending/<id>.json
 
 ## Merging
 
-`context-cube/.gitattributes` keeps both sides' lines for the append-only files, and routes generated files, drawer files, and box state through merge drivers named `cube-generated`, `cube-drawer`, and `cube-state`; a tool registers them in each clone. Box state merges field by field against the common ancestor: a field only one side changed keeps that change, nested objects merge the same way, and where both sides changed a field, the side with the later `updated` wins. After a merge, duplicate numbers are resolved by renumbering the more recently added box and rewriting links that name it.
+`context-cube/.gitattributes` keeps both sides' lines for the append-only files, and routes generated files, drawer files, and box state through merge drivers named `cube-generated`, `cube-drawer`, and `cube-state`; a tool registers them in each clone. Box state merges field by field against the common ancestor: a field only one side changed keeps that change, nested objects merge the same way, and where both sides changed a field, the side with the later `updated` wins. A record's mark is taken whole from one side, never mixed. A drawer that one side only added to at the end (a dated note) gets that addition after the other side's text, even where a line-based merge would call it a conflict; when both sides only added, ours comes first. After a merge, duplicate numbers are resolved by renumbering the more recently added box and rewriting links that name it. The two boxes shared one state file, so a record mark that doesn't fit its box's text is dropped and set again from that text.
 
 ## Generated files
 
@@ -166,7 +169,7 @@ Edits and deletions of approved invariant text wait in `.state/pending/<id>.json
 7. To search the memory, use `cube find <words>`, not a search of the whole project.
 8. Create rows, boxes, and history entries only with the tool. Never pick coordinates yourself.
 9. Never edit invariant text directly. Propose the change; a person approves it.
-10. Text moved in from the original files, and closed history entries, are records: add to them (`cube write <id> Z4 --append`); never rewrite or shorten them.
+10. Text moved in from the original files, and closed history entries, are records: add to them (`cube write <id> Z4 --append`); never rewrite or shorten them. Notes added later are dated and come after the text; where one disagrees with the text above it, the latest note is current.
 
 ## Token estimates
 

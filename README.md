@@ -77,9 +77,9 @@ A new project with no memory files has nothing to archive.
 
 ## Old text stays as written
 
-The text moved in from your files, and every closed history entry, is kept as it was written. The odd old details are the point: "we tried this a year ago and it failed because of X" is what a rewrite or a summary would shorten to "the previous approach failed." So agents never rewrite that text. When it's out of date, they add a dated note below it (`cube write <id> Z4 --append`), and direct edits to its files are blocked.
+The text moved in from your files, and every closed history entry, is kept as it was written. The odd old details are the point: "we tried this a year ago and it failed because of X" is what a rewrite or a summary would shorten to "the previous approach failed." So agents never rewrite that text. When it's out of date, they add a dated note below it (`cube write <id> Z4 --append`) that says what's true now, and keep the box's one-line summary current, since that's what agents read first. Direct edits to its files are blocked.
 
-A person can still change it on purpose. `cube replace <id> <drawer> @<file> --reason "..."` replaces the text, and `cube delete <id> --reason "..."` removes a box that holds it. Both ask you to confirm in Claude Code, and both go in `.state/approvals.log`. `cube check` compares the text with your archived originals and points out any that changed some other way. If you edited it yourself and meant to, `cube replace <id> <drawer> --reason "..."` with no text records that.
+A person can still change it on purpose. `cube replace <id> <drawer> @<file> --reason "..."` replaces the text (for example, to fold a pile of notes into one clean version), and `cube delete <id> --reason "..."` removes a box that holds it. Both ask you to confirm in Claude Code, both go in `.state/approvals.log`, and the text they take out is kept in `.state/archive/.records/`, where Claude doesn't read it but you can copy it back. `cube check` points out any of this text that changed some other way, including a file that went missing, and says where the earlier text can come from: your archived originals, or git if it was committed. If you edited it yourself and meant to, `cube replace <id> <drawer> --reason "..."` with no text records that.
 
 ## Invariants need a person's approval
 

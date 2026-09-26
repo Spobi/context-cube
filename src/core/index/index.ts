@@ -3,6 +3,7 @@ import { loadCube, type Cube } from "../cube";
 import { loadConfig, type CubeConfig } from "../config";
 import { splitGenerated } from "../format/generated";
 import { syncLinkNames } from "../ops";
+import { markRecords } from "../records";
 import { adaptersFor } from "../../adapters/registry";
 import { writeGenerated } from "./backlinks";
 import { cubeMd, rowListLine, writeRowPages } from "./pages";
@@ -73,10 +74,11 @@ export interface IndexResult {
   boxes: number;
 }
 
-/** Regenerates backlinks, row index pages, CUBE.md, and the always-loaded block. */
+/** Regenerates backlinks, row index pages, CUBE.md, and the always-loaded block, and marks new records. */
 export async function reindex(root: string, opts: { adapters?: boolean } = {}): Promise<IndexResult> {
   const config = loadConfig(root);
   syncLinkNames(root);
+  markRecords(root);
   let changed = writeGenerated(loadCube(root));
   const cube = loadCube(root);
   for (const row of cube.rows) changed += writeRowPages(row, config);

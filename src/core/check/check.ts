@@ -258,11 +258,11 @@ function unshortenedBlockTokens(cube: Cube, config: CubeConfig): number {
   return estimateTokens(alwaysLoadedBlock(cube, { ...config, limits: { ...config.limits, blockTokens: Number.MAX_SAFE_INTEGER } }).length, config.tokens.charsPerToken);
 }
 
-/** Records (text moved from the original files) still hold it word for word, unless a person changed it on purpose. */
+/** Records (text moved from the original files, closed history entries) still hold their text word for word, unless a person changed it on purpose. */
 function recordChecks(root: string, cube: Cube): Issue[] {
   return recordIssues(root, cube).map((i) => {
     const { message, fix } = renderRecordIssue(i);
-    return { level: "warn" as const, code: i.kind === "removed" ? "record-removed" : "record-changed", id: i.id, message, fix };
+    return { level: "warn" as const, code: `record-${i.kind}`, id: i.id, message, fix };
   });
 }
 

@@ -19,6 +19,8 @@ import {
   saveBoxState,
   sha,
   boxStatePath,
+  recordIntact,
+  recordMark,
   type BoxState,
 } from "./state/state";
 
@@ -325,7 +327,11 @@ function moveState(root: string, from: string, to: string): void {
   saveBoxState(root, { ...st, id: to });
 }
 
-/** Rewrites header links and inline references everywhere, using box keys → new ids. */
+/**
+ * Rewrites header links and inline references everywhere, using box keys → new
+ * ids. A record's references are kept current too, and its mark follows (only
+ * when its kept text was intact, so a change made outside the tool is still reported).
+ */
 export function rewriteReferences(root: string, mapping: Map<string, string>): void {
   const cube = loadCube(root);
   const rewrite = (ref: string): string | undefined => {
@@ -336,21 +342,32 @@ export function rewriteReferences(root: string, mapping: Map<string, string>): v
     return c.drawer !== undefined ? `${target}.Z${c.drawer}` : target;
   };
   for (const box of allBoxes(cube)) {
+    let st: BoxState | undefined;
     for (const d of box.drawers) {
       const text = readTextOr(d.path, "");
       let next: string;
+      let body = text;
       if (d.z === 0) {
         const doc = parseDoc(text);
         if (!doc.header) {
           next = rewriteInlineRefs(text, rewrite);
         } else {
+          body = doc.body;
           const links = doc.header.links.map((l) => ({ ...l, to: rewrite(l.to) ?? l.to }));
           next = renderDoc({ ...doc.header, links }, rewriteInlineRefs(doc.body, rewrite));
         }
       } else {
         next = rewriteInlineRefs(text, rewrite);
       }
-      if (next !== text) writeText(d.path, next);
+      if (next === text) continue;
+      writeText(d.path, next);
+      st ??= loadBoxState(root, box.id);
+      const mark = st?.records?.[`Z${d.z}`];
+      const own = splitGenerated(body).own;
+      if (st && mark && recordIntact(own, mark)) {
+        st.records![`Z${d.z}`] = recordMark(rewriteInlineRefs(own.slice(0, mark.chars), rewrite), mark.at, mark.replaced);
+        saveBoxState(root, st);
+      }
     }
   }
 }

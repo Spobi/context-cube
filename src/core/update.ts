@@ -85,13 +85,17 @@ export function updatePlan(root: string, opts: { commit?: CommitInfo; files?: st
   if (open) lines.push(`  (open entry: ${open.id} ${open.name}${unit ? `; one entry per ${unit}` : ""})`);
   else lines.push(`  (no entry is open yet; that command opens one${unit ? `; one entry per ${unit}` : ""})`);
   if (linked.length) {
-    lines.push("- These boxes are linked to the changed files. Check each against the change. If its summary or read-when line is now wrong, fix it; if its detail is wrong or incomplete, add what changed below it (never rewrite or shorten what's there). Then mark it checked:");
-    for (const b of linked.slice(0, 15)) {
+    const shown = linked.slice(0, 15);
+    lines.push(
+      "- These boxes are linked to the changed files. Check each against the change (a changed file doesn't mean the box is wrong). Its summary is what agents read first: if the change made it or the read-when line wrong, fix it. If its detail is wrong or incomplete, add a note below it saying what's true now (never rewrite or shorten what's there):",
+    );
+    for (const b of shown) {
       const hasZ4 = b.drawers.some((d) => d.z === 4);
       const z4 = hasZ4 ? `${c} write ${b.id} Z4 --append @<file>` : `${c} write ${b.id} Z4 @<file> (it has no Z4 yet: write one if you had to read code to understand it)`;
-      lines.push(`  - ${b.id} ${b.name} (context-cube/${b.relDir}/): ${c} edit ${b.id} --summary "..." | ${z4}; then ${c} ok ${b.id}`);
+      lines.push(`  - ${b.id} ${b.name} (context-cube/${b.relDir}/): ${c} edit ${b.id} --summary "..." | ${z4}`);
     }
     if (linked.length > 15) lines.push(`  - …and ${linked.length - 15} more (${c} status lists them)`);
+    lines.push(`- Then mark them checked, all in one command (it reads the code once): ${c} ok ${shown.map((b) => b.id).join(" ")}`);
   } else {
     lines.push(`- No boxes are linked to the changed files. If the change added a feature or component worth remembering, add a box: ${c} new-box <row> <name> --summary "..." --read-when "..."`);
   }

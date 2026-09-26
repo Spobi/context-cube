@@ -14,7 +14,7 @@ This folder is the project's memory: rules, history, invariants (rules that must
 7. To search the memory, use `node context-cube/.tool/cube.mjs find <words>`, not a search of the whole project.
 8. Create rows, boxes, and history entries only with cube commands (`node context-cube/.tool/cube.mjs <command>`). Never pick coordinates yourself.
 9. Never edit invariant text directly. Use `node context-cube/.tool/cube.mjs propose`.
-10. Text moved in from the project's original files, and closed history entries, are records: add to them with `node context-cube/.tool/cube.mjs write <id> Z4 --append`; never rewrite or shorten them.
+10. Text moved in from the project's original files, and closed history entries, are records: add to them with `node context-cube/.tool/cube.mjs write <id> Z4 --append`; never rewrite or shorten them. Notes added later are dated and come after the text; where one disagrees with the text above it, the latest note is current.
 
 ## Layout
 

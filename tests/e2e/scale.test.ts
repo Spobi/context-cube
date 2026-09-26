@@ -5,6 +5,7 @@ import { scriptedAsker } from "../../src/setup/ask";
 import { allBoxes, loadCube } from "../../src/core/cube";
 import { runChecks } from "../../src/core/check/check";
 import { placedCoverage } from "../../src/core/build/coverage";
+import { loadBoxState } from "../../src/core/state/state";
 import type { AICall } from "../../src/adapters/types";
 import { commitAll, tempProject } from "../helpers";
 
@@ -88,7 +89,11 @@ describe("a project the size of a real app", () => {
     expect(boxes).toBeGreaterThan(330);
     const cov = placedCoverage(root, ["CLAUDE.md", "HISTORY.md", "INVARIANTS.md", ...[1, 2, 3, 4, 5].map((d) => `docs/PLAN-${d}.md`)]);
     expect(cov.filter((c) => !c.ok)).toEqual([]);
-    expect((await runChecks(root)).filter((i) => i.level === "error")).toEqual([]);
+    const issues = await runChecks(root);
+    expect(issues.filter((i) => i.level === "error")).toEqual([]);
+    // Records get their marks partway through the build; nothing after that may change their text.
+    expect(issues.filter((i) => i.code.startsWith("record-"))).toEqual([]);
+    expect(Object.keys(loadBoxState(root, cube.rows.find((r) => r.type === "history")!.boxes[0].id)!.records ?? {})).toEqual(["Z4"]);
     expect(seconds).toBeLessThan(90);
   }, 180_000);
 });

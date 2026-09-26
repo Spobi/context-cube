@@ -78,8 +78,8 @@ Work only through the cube's commands (run from the project root):
 2. For each box the plan lists as linked to the changed files: read its Z0-overview.md (and Z4-detail.md if there is one) and compare with the change. A changed file doesn't mean the box is wrong; fix only what the change made wrong or incomplete:
    ${TOOL_COMMAND} edit <id> --summary "<one line>" --read-when "<one line>"
    ${TOOL_COMMAND} write <id> Z4 --append @<file saying what changed>
-   Never rewrite or shorten text that's already in a drawer. It may be the project's original notes, kept word for word, and its old details (why something failed, what not to try again) are what the cube is for. --append puts your text below it, dated. Only a box with no Z4 yet gets a new one: ${TOOL_COMMAND} write <id> Z4 @<file>
-   Then mark it checked: ${TOOL_COMMAND} ok <id>
+   The summary is what agents read first, so it should be true now. Never rewrite or shorten text that's already in a drawer. It may be the project's original notes, kept word for word, and its old details (why something failed, what not to try again) are what the cube is for. --append puts your note below it, dated. An agent reads the older text above it first, so make the note stand on its own: what changed, and what's true now. Only a box with no Z4 yet gets a new one: ${TOOL_COMMAND} write <id> Z4 @<file>
+   When you've checked them all, mark them checked in one command: ${TOOL_COMMAND} ok <id> <id> ...
 3. If the change added a component or feature worth remembering and no box covers it, create one:
    ${TOOL_COMMAND} new-box <row id> <short-name> --summary "..." --read-when "..."
    and link it: ${TOOL_COMMAND} link <new id> <related id> --rel see-also --note "<why someone would follow this link>"

@@ -30,13 +30,34 @@ interface Piece {
   drawer: number;
   start: number;
   end: number;
-  text?: string;
+  /** The piece's text in the drawer, given the source text it should be. */
+  text: (want: string) => string | undefined;
 }
 
 export function drawerOwnText(path: string, z: number): string {
   const raw = readTextOr(path, "");
   const body = z === 0 ? parseDoc(raw).body : raw;
   return splitGenerated(body).own;
+}
+
+type SourcePiece = { file: string; start: number; end: number; wrapped?: boolean };
+
+/** The migrated pieces wrapped in cube:from markers in a drawer's own text, by "file|start|end". */
+export function markedPieces(own: string): Map<string, string> {
+  return new Map([...own.matchAll(FROM_RE)].map((m) => [`${m[1]}|${m[2]}|${m[3]}`, m[4]]));
+}
+
+/**
+ * Where one migrated piece is in a drawer: found by its markers first (whatever
+ * the state's `wrapped` flag says; a merge can keep the other side's state), or,
+ * stored bare as the drawer's only piece, at the start of the drawer, since
+ * dated notes may have been added below it. `want` is the piece's source text.
+ */
+export function pieceText(own: string, marked: Map<string, string>, s: SourcePiece, piecesInDrawer: number, want: string): string | undefined {
+  const m = marked.get(`${s.file}|${s.start}|${s.end}`);
+  if (m !== undefined) return m;
+  if (s.wrapped || piecesInDrawer > 1) return undefined;
+  return own.startsWith(want) ? want : own;
 }
 
 export function placedCoverage(root: string, sources: string[]): PlacedCoverage[] {
@@ -49,14 +70,10 @@ export function placedCoverage(root: string, sources: string[]): PlacedCoverage[
     for (const s of st.sources) byDrawer.set(s.drawer, [...(byDrawer.get(s.drawer) ?? []), s]);
     for (const [z, list] of byDrawer) {
       const own = drawerOwnText(join(box.dir, DRAWERS[z].file), z);
-      const wrapped = new Map<string, string>();
-      for (const m of own.matchAll(FROM_RE)) wrapped.set(`${m[1]}|${m[2]}|${m[3]}`, m[4]);
+      const marked = markedPieces(own);
       for (const s of list) {
-        // Markers win over the state's `wrapped` flag: appending to a record wraps its text, and a
-        // merge can keep the other side's state.
-        const text = wrapped.get(`${s.file}|${s.start}|${s.end}`) ?? (s.wrapped || list.length > 1 ? undefined : own);
         const arr = pieces.get(s.file) ?? [];
-        arr.push({ box: box.id, drawer: z, start: s.start, end: s.end, text });
+        arr.push({ box: box.id, drawer: z, start: s.start, end: s.end, text: (want) => pieceText(own, marked, s, list.length, want) });
         pieces.set(s.file, arr);
       }
     }
@@ -73,10 +90,11 @@ export function placedCoverage(root: string, sources: string[]): PlacedCoverage[
         return { source, ok: false, lines: lines.length, changed, problem: `lines ${next}–${p.start - 1} are ${p.start > next ? "not in any drawer" : "in two places"}` };
       }
       const want = `${lines.slice(p.start - 1, p.end).join("\n")}\n`;
-      if (p.text === undefined) {
+      const got = p.text(want);
+      if (got === undefined) {
         return { source, ok: false, lines: lines.length, changed, problem: `the piece at lines ${p.start}–${p.end} is missing from ${p.box}.Z${p.drawer}` };
       }
-      if (p.text !== want) changed.push({ box: p.box, drawer: p.drawer, start: p.start, end: p.end });
+      if (got !== want) changed.push({ box: p.box, drawer: p.drawer, start: p.start, end: p.end });
       next = p.end + 1;
     }
     if (next !== lines.length + 1) return { source, ok: false, lines: lines.length, changed, problem: `lines ${next}–${lines.length} are not in any drawer` };

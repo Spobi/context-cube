@@ -10,6 +10,7 @@ import { joinGenerated, splitGenerated } from "./format/generated";
 import { loadBoxState, saveBoxState, sha } from "./state/state";
 import { gitUser } from "./git";
 import { recordQuality } from "./stats/ai";
+import { keepDeletedBox } from "./records";
 
 /**
  * Invariant approval (plan 9). New invariants go in at once, marked pending,
@@ -45,6 +46,8 @@ export interface ApprovalLog {
   reason: string;
   proposedBy: string;
   weakens: boolean;
+  /** A deleted invariant's folder, kept in the archive. */
+  kept?: string;
 }
 
 function pendingDir(root: string): string {
@@ -218,6 +221,7 @@ export function approveText(root: string, id: string, text: string): void {
 }
 
 function applyProposal(root: string, p: Proposal, decision: ApprovalLog["decision"], byPerson: boolean, by: string, reason: string): void {
+  let kept: string | undefined;
   const cube = loadCube(root);
   const box = getBox(cube, p.box);
   if (!box) throw new CubeError(`${p.box} no longer exists.`);
@@ -232,12 +236,13 @@ function applyProposal(root: string, p: Proposal, decision: ApprovalLog["decisio
     touchState(root, box.id, box.dir);
     approveText(root, box.id, p.newText!);
   } else if (p.kind === "delete") {
+    kept = keepDeletedBox(root, box);
     deleteBox(root, box.id, `deleted with approval: ${p.reason}`);
   } else {
     approveText(root, box.id, z1Own(box));
     bulkUpdateHeaders(root, new Map([[box.id, { status: "ok" }]]));
   }
-  logDecision(root, { t: new Date().toISOString(), proposal: p.id, kind: p.kind, box: p.box, decision, by, reviewedByPerson: byPerson, reason, proposedBy: p.by, weakens: p.weakens });
+  logDecision(root, { t: new Date().toISOString(), proposal: p.id, kind: p.kind, box: p.box, decision, by, reviewedByPerson: byPerson, reason, proposedBy: p.by, weakens: p.weakens, ...(kept ? { kept } : {}) });
 }
 
 function findProposal(root: string, ref: string): Proposal {

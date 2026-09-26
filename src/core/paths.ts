@@ -44,10 +44,15 @@ export interface CubePaths {
   approvals: string;
   pending: string;
   archive: string;
+  /** Records a person deleted or replaced, kept inside the archive (where agents don't read). */
+  keptRecords: string;
   logs: string;
   tool: string;
   toolFile: string;
 }
+
+/** The archive's one folder that isn't a copy of a project file (see keptRecords). */
+export const KEPT_RECORDS_DIR = ".records";
 
 export function cubePaths(root: string): CubePaths {
   const cube = join(root, CUBE_DIR);
@@ -65,6 +70,7 @@ export function cubePaths(root: string): CubePaths {
     approvals: join(state, "approvals.log"),
     pending: join(state, "pending"),
     archive: join(state, "archive"),
+    keptRecords: join(state, "archive", KEPT_RECORDS_DIR),
     logs: join(cube, ".logs"),
     tool: join(cube, ".tool"),
     toolFile: join(cube, ".tool", "cube.mjs"),

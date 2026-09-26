@@ -61,21 +61,62 @@ export function protectedReason(root: string, file: string): string | undefined 
 const PROTECTED_IN_BASH = /(context-cube\/(?:cube\.config\.json|\.state\/|\.tool\/)|Z1-invariants\.md)/;
 const WRITES_IN_BASH = /(>|\btee\b|\bsed\s+(-\w*\s+)*-i|\bperl\s+(-\w*\s+)*-i|\bmv\b|\bcp\b|\brm\b|\btruncate\b|\bdd\b|\bpython3?\b|\bnode\s+-e\b|\bruby\s+-e\b)/;
 const PERSON_ONLY = /(?:cube(?:\.mjs)?|context-cube)["']?\s+(config\s+set|approve|reject|restore|replace)\b/;
-const DELETE_CMD = /(?:cube(?:\.mjs)?|context-cube)["']?\s+delete\s+([^;&|\n]*)/;
+const DELETE_AT = /(?:cube(?:\.mjs)?|context-cube)["']?\s+delete\b/g;
 const ARCHIVE_IN_BASH = /context-cube\/\.state\/archive\b/;
 
-/** The box a `cube delete` names, wherever its options are. */
-function deleteTarget(cmd: string): string | undefined {
-  const rest = DELETE_CMD.exec(cmd)?.[1];
-  if (rest === undefined) return undefined;
-  const id = /\bY\d{2}\.X\d+\b/.exec(rest);
-  if (id) return id[0];
-  const words = rest.match(/"[^"]*"|'[^']*'|\S+/g) ?? [];
-  for (let i = 0; i < words.length; i++) {
-    if (words[i] === "--reason") i++;
-    else if (!words[i].startsWith("-")) return words[i].replace(/^["']|["']$/g, "");
+/** The shell words from here to the end of one simple command (an unquoted ; & | ) or newline), quotes removed. */
+function commandWords(s: string): string[] {
+  const words: string[] = [];
+  let cur = "";
+  let inWord = false;
+  let quote: string | undefined;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (quote) {
+      if (ch === quote) quote = undefined;
+      else if (ch === "\\" && quote === '"' && i + 1 < s.length) cur += s[++i];
+      else cur += ch;
+    } else if (ch === "'" || ch === '"') {
+      quote = ch;
+      inWord = true;
+    } else if (ch === "\\" && i + 1 < s.length) {
+      cur += s[++i];
+      inWord = true;
+    } else if (/[;&|)\n]/.test(ch)) {
+      break;
+    } else if (/\s/.test(ch)) {
+      if (inWord) words.push(cur);
+      cur = "";
+      inWord = false;
+    } else {
+      cur += ch;
+      inWord = true;
+    }
   }
-  return undefined;
+  if (inWord) words.push(cur);
+  return words;
+}
+
+/**
+ * The boxes named by every `cube delete` in a shell command, wherever their
+ * options are (a --reason may itself name a box). `unknown` when one names its
+ * box through a variable or command substitution.
+ */
+export function deleteTargets(cmd: string): { ids: string[]; unknown: boolean } {
+  const ids: string[] = [];
+  let unknown = false;
+  for (const m of cmd.matchAll(DELETE_AT)) {
+    const words = commandWords(cmd.slice(m.index! + m[0].length));
+    for (let i = 0; i < words.length; i++) {
+      if (words[i] === "--reason") i++;
+      else if (!words[i].startsWith("-")) {
+        if (/[$`]/.test(words[i])) unknown = true;
+        else ids.push(words[i]);
+        break;
+      }
+    }
+  }
+  return { ids, unknown };
 }
 
 const PERSON_ONLY_WHAT: Record<string, string> = {
@@ -132,11 +173,16 @@ registerHookHandler(async (event, input, root, features): Promise<HookOutcome | 
   }
   const m = PERSON_ONLY.exec(cmd);
   if (m) return needsPerson(m[1].startsWith("config") ? "Changing a Context Cube setting" : PERSON_ONLY_WHAT[m[1]], cmd, input);
-  const target = deleteTarget(cmd);
-  if (target) {
+  const del = deleteTargets(cmd);
+  if (del.ids.length || del.unknown) {
     const cube = loadCube(root);
-    const box = getBox(cube, target);
-    if (box && isRecordBox(root, cube, box)) return needsPerson(`Deleting ${box.id}, which holds a record (text moved from the original files, or a closed history entry),`, cmd, input);
+    const records = del.ids.flatMap((id) => {
+      const box = getBox(cube, id);
+      return box && isRecordBox(root, cube, box) ? [box.id] : [];
+    });
+    if (records.length === 1) return needsPerson(`Deleting ${records[0]}, which holds a record (text moved from the original files, or a closed history entry),`, cmd, input);
+    if (records.length) return needsPerson(`Deleting ${records.join(", ")}, which hold records (text moved from the original files, or closed history entries),`, cmd, input);
+    if (del.unknown) return needsPerson("Deleting a box named through a shell variable (it may hold a record)", cmd, input);
   }
 });
 

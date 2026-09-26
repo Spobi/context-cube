@@ -24,5 +24,12 @@
     "files": []
   },
   "names": [],
-  "fingerprints": {}
+  "fingerprints": {},
+  "records": {
+    "Z4": {
+      "sha": "fbb2802a66c5671a",
+      "chars": 82,
+      "at": "2026-09-26T17:56:52.908Z"
+    }
+  }
 }
