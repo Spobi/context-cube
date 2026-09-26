@@ -1,0 +1,29 @@
+{
+  "id": "Y03.X002",
+  "created": "2026-09-24T12:25:56.584Z",
+  "updated": "2026-09-24T12:25:56.666Z",
+  "drawers": {
+    "Z0": {
+      "sha": "e3b0c44298fc1c14",
+      "chars": 0
+    }
+  },
+  "code": {
+    "files": [
+      {
+        "path": "src/sync/tombstones.ts",
+        "why": "named in the text, `TOMBSTONE_DAYS` (line 1)"
+      }
+    ]
+  },
+  "names": [
+    "TOMBSTONE_DAYS"
+  ],
+  "fingerprints": {
+    "src/sync/tombstones.ts": "956f7f5501011c5a"
+  },
+  "generated": {
+    "Z1": "311eb0eafbca9c56",
+    "Z2": "1bb951100ebe4095"
+  }
+}

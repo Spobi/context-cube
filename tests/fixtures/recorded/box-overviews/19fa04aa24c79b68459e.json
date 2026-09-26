@@ -1,0 +1,44 @@
+{
+  "step": "box-overviews",
+  "tier": "sonnet",
+  "output": {
+    "pieces": [
+      {
+        "id": "Y03.X004",
+        "name": "rate-limiter-counts-retries",
+        "summary": "The server rate limiter counts retry attempts along with original requests; a retry storm once locked a test account out for an hour.",
+        "readWhen": "debugging retry/upload failures, tuning retry backoff, or investigating unexpected account lockouts in sync",
+        "links": [
+          {
+            "to": "Y03.X003",
+            "rel": "see-also",
+            "note": "retry storms arise from batched upload retry behavior"
+          },
+          {
+            "to": "Y03",
+            "rel": "see-also",
+            "note": "describes a gotcha in how uploads/retries reach the server"
+          }
+        ]
+      },
+      {
+        "id": "Y04.X001",
+        "name": "no-clock-mocking-sync-tests",
+        "summary": "Sync tests must use a real clock, not a mocked one, because the drift bug in sync only reproduces with real timing.",
+        "readWhen": "writing or debugging sync tests, or investigating clock-drift related sync bugs",
+        "links": [
+          {
+            "to": "Y04",
+            "rel": "implements",
+            "note": "a known trap when writing sync tests"
+          },
+          {
+            "to": "Y03.X001",
+            "rel": "see-also",
+            "note": "clock drift affects offline replay ordering behavior"
+          }
+        ]
+      }
+    ]
+  }
+}

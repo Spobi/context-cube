@@ -1,0 +1,22 @@
+{
+  "step": "recipe",
+  "tier": "sonnet",
+  "output": {
+    "version": 1,
+    "sources": [
+      {
+        "path": "CLAUDE.md",
+        "sections": [
+          {
+            "startLine": 1,
+            "kind": "rules",
+            "split": {
+              "mode": "items"
+            }
+          }
+        ]
+      }
+    ],
+    "refs": []
+  }
+}

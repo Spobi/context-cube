@@ -1,0 +1,20 @@
+{
+  "step": "classify",
+  "tier": "haiku",
+  "output": {
+    "files": [
+      {
+        "path": "CLAUDE.md",
+        "role": "rules",
+        "confidence": "high",
+        "why": "Standing instructions for developers: always run the linter before finishing and keep functions under 50 lines."
+      },
+      {
+        "path": "HISTORY.md",
+        "role": "history",
+        "confidence": "high",
+        "why": "Version history showing what changed in each release (0.2 added export, 0.1 was the first version)."
+      }
+    ]
+  }
+}

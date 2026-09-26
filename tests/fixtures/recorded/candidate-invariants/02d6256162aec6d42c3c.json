@@ -1,0 +1,17 @@
+{
+  "step": "candidate-invariants",
+  "tier": "sonnet",
+  "output": {
+    "candidates": [
+      {
+        "name": "money-as-integer-cents",
+        "summary": "Monetary amounts must be stored and processed as integer cents, never floats.",
+        "readWhen": "Any change touching money.ts or code that creates, parses, sums, or serializes monetary amounts.",
+        "text": "- All monetary amounts **must** be represented as integer cents.\n- \"Never use floats for money\" — floating-point representation introduces rounding/precision errors in financial calculations.\n- If violated: amounts can silently drift (e.g. $0.1 + $0.2 rounding errors), causing incorrect balances, charges, or totals.",
+        "evidence": [
+          "src/money.ts:1"
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "step": "recipe",
+  "tier": "sonnet",
+  "output": {
+    "version": 1,
+    "sources": [
+      {
+        "path": "CONSTITUTION.md",
+        "sections": [
+          {
+            "startLine": 1,
+            "kind": "invariants",
+            "split": {
+              "mode": "heading",
+              "level": 2
+            },
+            "key": "^##\\s+§\\s*(\\d+)"
+          }
+        ]
+      }
+    ],
+    "refs": [
+      {
+        "pattern": "§\\s*(\\d+)",
+        "kind": "invariants"
+      }
+    ]
+  }
+}

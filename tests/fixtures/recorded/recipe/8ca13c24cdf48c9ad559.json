@@ -1,0 +1,33 @@
+{
+  "step": "recipe",
+  "tier": "sonnet",
+  "output": {
+    "version": 1,
+    "sources": [
+      {
+        "path": "NOTES.md",
+        "sections": [
+          {
+            "startLine": 1,
+            "kind": "rules",
+            "split": {
+              "mode": "items"
+            }
+          },
+          {
+            "startLine": 7,
+            "kind": "history",
+            "split": {
+              "mode": "heading",
+              "level": 3
+            },
+            "key": "^###\\s+(\\d{4}-\\d{2}-\\d{2})",
+            "date": "^###\\s+(\\d{4}-\\d{2}-\\d{2})",
+            "order": "newest-first"
+          }
+        ]
+      }
+    ],
+    "refs": []
+  }
+}

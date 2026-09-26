@@ -1,0 +1,24 @@
+{
+  "id": "Y00.X004",
+  "created": "2026-09-24T12:25:56.566Z",
+  "updated": "2026-09-24T12:25:56.566Z",
+  "drawers": {
+    "Z0": {
+      "sha": "7bfaa4bdb10d3a27",
+      "chars": 43
+    }
+  },
+  "sources": [
+    {
+      "file": "NOTES.md",
+      "start": 4,
+      "end": 4,
+      "drawer": 0
+    }
+  ],
+  "code": {
+    "files": []
+  },
+  "names": [],
+  "fingerprints": {}
+}

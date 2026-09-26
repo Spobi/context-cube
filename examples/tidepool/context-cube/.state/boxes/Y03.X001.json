@@ -1,0 +1,30 @@
+{
+  "id": "Y03.X001",
+  "created": "2026-09-24T12:25:56.583Z",
+  "updated": "2026-09-24T12:25:56.665Z",
+  "drawers": {
+    "Z0": {
+      "sha": "e3b0c44298fc1c14",
+      "chars": 0
+    }
+  },
+  "code": {
+    "files": [
+      {
+        "path": "src/sync/queue.ts",
+        "why": "named in the text, `replay` (line 2)"
+      }
+    ]
+  },
+  "names": [
+    "replay"
+  ],
+  "fingerprints": {
+    "src/sync/queue.ts": "412d5183dd07b8c9"
+  },
+  "generated": {
+    "Z1": "6aa59cb781825c20",
+    "Z2": "59b9f57ccc610b96",
+    "Z3": "5fb35aa8110557df"
+  }
+}

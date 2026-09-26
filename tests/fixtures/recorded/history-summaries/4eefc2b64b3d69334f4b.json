@@ -1,0 +1,104 @@
+{
+  "step": "history-summaries",
+  "tier": "haiku",
+  "output": {
+    "entries": [
+      {
+        "id": "Y01.X061",
+        "name": "export-61-crash-fix",
+        "summary": "Added export option 61 for report screen. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing report export options, or when empty report crashes on open",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X062",
+        "name": "export-62-crash-fix",
+        "summary": "Added export option 62 for report screen. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing report export options, or when empty report crashes on open",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X063",
+        "name": "export-63-shortcut-crash-fix",
+        "summary": "Added export option 63 and keyboard shortcut for report screen. Fixed empty report crash.",
+        "readWhen": "Before adding report shortcuts or changing export options, or when empty report crashes",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X064",
+        "name": "export-64-crash-fix",
+        "summary": "Added export option 64 for report screen. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing report export options, or when empty report crashes on open",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X065",
+        "name": "export-65-crash-fix",
+        "summary": "Added export option 65 for report screen. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing report export options, or when empty report crashes on open",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X066",
+        "name": "export-66-shortcut-crash-fix",
+        "summary": "Added export option 66 and keyboard shortcut for report screen. Fixed empty report crash.",
+        "readWhen": "Before adding report shortcuts or changing export options, or when empty report crashes",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X067",
+        "name": "export-67-crash-fix",
+        "summary": "Added export option 67 for report screen. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing report export options, or when empty report crashes on open",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X068",
+        "name": "export-68-crash-fix",
+        "summary": "Added export option 68 for report screen. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing report export options, or when empty report crashes on open",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X069",
+        "name": "export-69-shortcut-crash-fix",
+        "summary": "Added export option 69 and keyboard shortcut for report screen. Fixed empty report crash.",
+        "readWhen": "Before adding report shortcuts or changing export options, or when empty report crashes",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X070",
+        "name": "export-70-crash-fix",
+        "summary": "Added export option 70 for report screen. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing report export options, or when empty report crashes on open",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X071",
+        "name": "export-71-crash-fix",
+        "summary": "Added export option 71 for report screen. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing report export options, or when empty report crashes on open",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X072",
+        "name": "export-72-shortcut-crash-fix",
+        "summary": "Added export option 72 and keyboard shortcut for report screen. Fixed empty report crash.",
+        "readWhen": "Before adding report shortcuts or changing export options, or when empty report crashes",
+        "touches": [],
+        "projectWide": true
+      }
+    ]
+  }
+}

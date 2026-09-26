@@ -1,0 +1,20 @@
+{
+  "adapter": "claude-code",
+  "scope": "shared",
+  "features": [],
+  "files": [
+    ".claude/agents/cube-updater.md",
+    ".claude/commands/cube-update.md"
+  ],
+  "dirs": [
+    ".claude",
+    ".claude/rules",
+    ".claude/agents",
+    ".claude/commands"
+  ],
+  "block": {
+    "file": "CLAUDE.md",
+    "sep": "\n",
+    "created": false
+  }
+}

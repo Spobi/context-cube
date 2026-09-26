@@ -1,0 +1,1 @@
+- Don't mock the clock in sync tests; the drift bug only shows with a real clock.

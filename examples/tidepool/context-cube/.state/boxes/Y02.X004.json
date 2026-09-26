@@ -1,0 +1,29 @@
+{
+  "id": "Y02.X004",
+  "created": "2026-09-24T12:25:56.578Z",
+  "updated": "2026-09-24T12:25:56.726Z",
+  "drawers": {
+    "Z0": {
+      "sha": "e3b0c44298fc1c14",
+      "chars": 0
+    },
+    "Z1": {
+      "sha": "4dc9ff05b01d148f",
+      "chars": 200
+    }
+  },
+  "sources": [
+    {
+      "file": "CONSTITUTION.md",
+      "start": 20,
+      "end": 22,
+      "drawer": 1
+    }
+  ],
+  "approvedZ1": "4dc9ff05b01d148f",
+  "code": {
+    "files": []
+  },
+  "names": [],
+  "fingerprints": {}
+}

@@ -1,0 +1,26 @@
+{
+  "step": "recipe",
+  "tier": "sonnet",
+  "output": {
+    "version": 1,
+    "sources": [
+      {
+        "path": "HISTORY.md",
+        "sections": [
+          {
+            "startLine": 1,
+            "kind": "history",
+            "split": {
+              "mode": "heading",
+              "level": 2
+            },
+            "key": "^##\\s+([\\d.]+)",
+            "summary": "^##\\s+[\\d.]+\\s*—\\s*(.+)$",
+            "order": "newest-first"
+          }
+        ]
+      }
+    ],
+    "refs": []
+  }
+}

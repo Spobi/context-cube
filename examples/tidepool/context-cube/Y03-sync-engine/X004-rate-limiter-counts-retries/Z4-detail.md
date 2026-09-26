@@ -1,0 +1,1 @@
+- The rate limiter counts retries too; a retry storm locked out a test account for an hour.

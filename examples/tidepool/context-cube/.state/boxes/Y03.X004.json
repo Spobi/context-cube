@@ -1,0 +1,28 @@
+{
+  "id": "Y03.X004",
+  "created": "2026-09-24T12:25:56.588Z",
+  "updated": "2026-09-24T12:25:56.670Z",
+  "drawers": {
+    "Z0": {
+      "sha": "e3b0c44298fc1c14",
+      "chars": 0
+    },
+    "Z4": {
+      "sha": "fa0c519f1a73bac8",
+      "chars": 92
+    }
+  },
+  "sources": [
+    {
+      "file": "CLAUDE.md",
+      "start": 15,
+      "end": 15,
+      "drawer": 4
+    }
+  ],
+  "code": {
+    "files": []
+  },
+  "names": [],
+  "fingerprints": {}
+}

@@ -1,0 +1,35 @@
+{
+  "preset": "balanced",
+  "invariants": {
+    "approval": "required"
+  },
+  "history": {
+    "unit": "day",
+    "gitCommits": 400
+  },
+  "update": {
+    "trigger": "commit"
+  },
+  "agents": [
+    "claude-code"
+  ],
+  "sources": [],
+  "tokens": {
+    "charsPerToken": 4
+  },
+  "rowIndex": {
+    "pageTokens": 3000
+  },
+  "limits": {
+    "z0Words": 80,
+    "rootDrawerTokens": 1500,
+    "blockTokens": 3000,
+    "links": 8
+  },
+  "ai": {
+    "parallel": 4
+  },
+  "hooks": {
+    "scope": "local"
+  }
+}

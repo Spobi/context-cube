@@ -1,0 +1,34 @@
+{
+  "id": "Y00.X000",
+  "created": "2026-09-24T12:25:56.545Z",
+  "updated": "2026-09-24T12:25:56.596Z",
+  "drawers": {
+    "Z0": {
+      "sha": "b72039c19dbcebf2",
+      "chars": 110
+    },
+    "Z4": {
+      "sha": "3776e7711ff15f5a",
+      "chars": 283
+    }
+  },
+  "sources": [
+    {
+      "file": "CLAUDE.md",
+      "start": 1,
+      "end": 3,
+      "drawer": 4,
+      "wrapped": true
+    },
+    {
+      "file": "NOTES.md",
+      "start": 1,
+      "end": 3,
+      "drawer": 4,
+      "wrapped": true
+    }
+  ],
+  "generated": {
+    "Z2": "f9f07aab69042fcc"
+  }
+}

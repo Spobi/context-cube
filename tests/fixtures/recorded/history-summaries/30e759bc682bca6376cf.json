@@ -1,0 +1,104 @@
+{
+  "step": "history-summaries",
+  "tier": "haiku",
+  "output": {
+    "entries": [
+      {
+        "id": "Y01.X025",
+        "name": "export-option-25",
+        "summary": "Added export option 25 for reports. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing report export options, or when empty reports crash",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X026",
+        "name": "export-option-26",
+        "summary": "Added export option 26 for reports. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing report export options, or when empty reports crash",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X027",
+        "name": "export-option-27-shortcut",
+        "summary": "Added export option 27 and keyboard shortcut. Fixed empty report crash.",
+        "readWhen": "Before changing report export options or keyboard shortcuts, or when empty reports crash",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X028",
+        "name": "export-option-28",
+        "summary": "Added export option 28 for reports. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing report export options, or when empty reports crash",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X029",
+        "name": "export-option-29",
+        "summary": "Added export option 29 for reports. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing report export options, or when empty reports crash",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X030",
+        "name": "export-option-30-shortcut",
+        "summary": "Added export option 30 and keyboard shortcut. Fixed empty report crash.",
+        "readWhen": "Before changing report export options or keyboard shortcuts, or when empty reports crash",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X031",
+        "name": "export-option-31",
+        "summary": "Added export option 31 for reports. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing report export options, or when empty reports crash",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X032",
+        "name": "export-option-32",
+        "summary": "Added export option 32 for reports. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing report export options, or when empty reports crash",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X033",
+        "name": "export-option-33-shortcut",
+        "summary": "Added export option 33 and keyboard shortcut. Fixed empty report crash.",
+        "readWhen": "Before changing report export options or keyboard shortcuts, or when empty reports crash",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X034",
+        "name": "export-option-34",
+        "summary": "Added export option 34 for reports. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing report export options, or when empty reports crash",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X035",
+        "name": "export-option-35",
+        "summary": "Added export option 35 for reports. Fixed crash when opening empty reports.",
+        "readWhen": "Before changing report export options, or when empty reports crash",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X036",
+        "name": "export-option-36-shortcut",
+        "summary": "Added export option 36 and keyboard shortcut. Fixed empty report crash.",
+        "readWhen": "Before changing report export options or keyboard shortcuts, or when empty reports crash",
+        "touches": [],
+        "projectWide": true
+      }
+    ]
+  }
+}

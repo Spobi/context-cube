@@ -1,0 +1,64 @@
+{
+  "step": "history-summaries",
+  "tier": "haiku",
+  "output": {
+    "entries": [
+      {
+        "id": "Y01.X001",
+        "name": "conflict-highlighting-first",
+        "summary": "First implementation of conflict highlighting for offline edits.",
+        "readWhen": "Before modifying conflict visualization or when working on offline edit display",
+        "touches": [
+          {
+            "to": "Y03",
+            "note": "added visualization of conflicts in the sync system"
+          }
+        ],
+        "projectWide": false
+      },
+      {
+        "id": "Y01.X002",
+        "name": "sync-worker-separate-thread",
+        "summary": "Moved the sync worker to its own thread to improve application responsiveness.",
+        "readWhen": "Before modifying the sync worker or when investigating thread safety issues",
+        "touches": [
+          {
+            "to": "Y03",
+            "note": "moved sync worker to separate thread"
+          }
+        ],
+        "projectWide": false
+      },
+      {
+        "id": "Y01.X003",
+        "name": "offline-queue",
+        "summary": "Edits made offline wait in a queue and replay in order when the device reconnects.",
+        "readWhen": "Before changing offline edit storage or replay logic, or when edits are skipped or applied out of order",
+        "touches": [
+          {
+            "to": "Y03.X001",
+            "note": "implemented the offline replay queue"
+          },
+          {
+            "to": "Y02.X001",
+            "note": "implements the invariant that edits replay in order"
+          }
+        ],
+        "projectWide": false
+      },
+      {
+        "id": "Y01.X004",
+        "name": "batched-uploads",
+        "summary": "Grouped queued edits into batches of 50 for upload to stay under server rate limits.",
+        "readWhen": "Before changing the batch size or upload strategy, or when uploads are throttled or rejected",
+        "touches": [
+          {
+            "to": "Y03.X003",
+            "note": "implemented batched upload grouping"
+          }
+        ],
+        "projectWide": false
+      }
+    ]
+  }
+}

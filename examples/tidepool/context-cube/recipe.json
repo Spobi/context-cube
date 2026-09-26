@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "path": "CLAUDE.md",
+      "sections": [
+        {
+          "startLine": 1,
+          "title": "Working here",
+          "kind": "rules",
+          "split": {
+            "mode": "items"
+          }
+        },
+        {
+          "startLine": 8,
+          "title": "Recent changes",
+          "kind": "history",
+          "split": {
+            "mode": "heading",
+            "level": 3
+          },
+          "key": "^###\\s+(\\d{4}-\\d{2}-\\d{2})",
+          "date": "^###\\s+(\\d{4}-\\d{2}-\\d{2})",
+          "summary": "^###\\s+\\d{4}-\\d{2}-\\d{2}\\s+—\\s+(.+)$",
+          "order": "newest-first"
+        },
+        {
+          "startLine": 14,
+          "title": "Lessons",
+          "kind": "notes",
+          "split": {
+            "mode": "items"
+          }
+        }
+      ]
+    },
+    {
+      "path": "CONSTITUTION.md",
+      "sections": [
+        {
+          "startLine": 1,
+          "kind": "invariants",
+          "split": {
+            "mode": "heading",
+            "level": 2
+          },
+          "key": "^##\\s+§\\s*(\\d+)"
+        }
+      ]
+    },
+    {
+      "path": "NOTES.md",
+      "sections": [
+        {
+          "startLine": 1,
+          "kind": "rules",
+          "split": {
+            "mode": "items"
+          }
+        },
+        {
+          "startLine": 7,
+          "kind": "history",
+          "split": {
+            "mode": "heading",
+            "level": 3
+          },
+          "key": "^###\\s+(\\d{4}-\\d{2}-\\d{2})",
+          "date": "^###\\s+(\\d{4}-\\d{2}-\\d{2})",
+          "order": "newest-first"
+        }
+      ]
+    }
+  ],
+  "refs": [
+    {
+      "pattern": "§\\s*(\\d+)",
+      "kind": "invariants"
+    }
+  ]
+}

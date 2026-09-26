@@ -1,0 +1,32 @@
+{
+  "id": "Y02.X001",
+  "created": "2026-09-24T12:25:56.576Z",
+  "updated": "2026-09-24T12:25:56.659Z",
+  "drawers": {
+    "Z0": {
+      "sha": "e3b0c44298fc1c14",
+      "chars": 0
+    },
+    "Z1": {
+      "sha": "edd5a7e81c2d45f0",
+      "chars": 262
+    }
+  },
+  "sources": [
+    {
+      "file": "CONSTITUTION.md",
+      "start": 5,
+      "end": 9,
+      "drawer": 1
+    }
+  ],
+  "approvedZ1": "edd5a7e81c2d45f0",
+  "code": {
+    "files": []
+  },
+  "names": [],
+  "fingerprints": {},
+  "generated": {
+    "Z3": "910fb3231f26c020"
+  }
+}

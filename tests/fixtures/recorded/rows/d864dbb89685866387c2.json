@@ -1,0 +1,51 @@
+{
+  "step": "rows",
+  "tier": "opus",
+  "output": {
+    "rows": [
+      {
+        "name": "database",
+        "type": "system",
+        "summary": "The Postgres database: why Postgres was chosen, raw-SQL data access with no ORM, and the migration runner in src/db/migrate.ts.",
+        "readWhen": "Writing or changing migrations, adding tables or queries, touching src/db/, or proposing a different database or query library.",
+        "conventions": [
+          "Postgres is the database (ADR 0001); don't add another datastore without a new decision record.",
+          "No ORM (ADR 0003): write queries as plain SQL.",
+          "Every migration must be reversible: ship the down step with the up step."
+        ],
+        "boxes": [
+          {
+            "name": "migration-runner",
+            "summary": "src/db/migrate.ts exports migrate(), the entry point that applies database migrations. It is currently a 2-line stub.",
+            "readWhen": "Running, adding, or rolling back migrations, or changing how migrate() finds and applies them."
+          }
+        ]
+      },
+      {
+        "name": "feature-flags",
+        "type": "system",
+        "summary": "Feature flags, which live in the config service (ADR 0002), and how long a flag may stay after rollout.",
+        "readWhen": "Adding, reading, rolling out, or removing a feature flag, or changing where flags are stored.",
+        "conventions": [
+          "Flags are defined and read through the config service, not hard-coded or kept in env files.",
+          "Remove a flag within two releases of its full rollout."
+        ],
+        "boxes": []
+      }
+    ],
+    "place": [
+      {
+        "piece": "n1",
+        "row": "database"
+      },
+      {
+        "piece": "n2",
+        "row": "feature-flags"
+      },
+      {
+        "piece": "n3",
+        "row": "database"
+      }
+    ]
+  }
+}

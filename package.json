@@ -1,0 +1,52 @@
+{
+  "name": "context-cube",
+  "version": "0.1.0",
+  "description": "Turn a project's AI memory files into a structured cube that coding agents read top-down: short summaries first, detail only when a task needs it.",
+  "type": "module",
+  "bin": {
+    "context-cube": "dist/cube.mjs",
+    "cube": "dist/cube.mjs"
+  },
+  "files": [
+    "dist",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepare": "node scripts/build.mjs"
+  },
+  "keywords": [
+    "claude-code",
+    "ai",
+    "agents",
+    "memory",
+    "context",
+    "llm"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Spobi/context-cube.git"
+  },
+  "homepage": "https://github.com/Spobi/context-cube#readme",
+  "bugs": {
+    "url": "https://github.com/Spobi/context-cube/issues"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.4",
+    "commander": "^14.0.3",
+    "esbuild": "^0.28.2",
+    "fast-glob": "^3.3.3",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.1",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.5"
+  }
+}

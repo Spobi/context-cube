@@ -1,0 +1,57 @@
+{
+  "step": "box-overviews",
+  "tier": "sonnet",
+  "output": {
+    "pieces": [
+      {
+        "id": "Y03.X002",
+        "name": "adr-use-postgres",
+        "summary": "Postgres 16 was chosen for all services for strong relational consistency; migrations run via the migrate tool and every migration must be reversible.",
+        "readWhen": "choosing or justifying the database technology, or writing/reviewing a migration",
+        "links": [
+          {
+            "to": "Y03",
+            "rel": "implements",
+            "note": "records the decision behind the database choice"
+          },
+          {
+            "to": "Y03.X001",
+            "rel": "see-also",
+            "note": "names the migrate tool used to apply migrations"
+          }
+        ]
+      },
+      {
+        "id": "Y03.X003",
+        "name": "adr-no-orm",
+        "summary": "SQL is written by hand with a thin query helper instead of using an ORM.",
+        "readWhen": "writing database access code or deciding whether to add an ORM",
+        "links": [
+          {
+            "to": "Y03",
+            "rel": "implements",
+            "note": "specifies the raw-SQL, no-ORM data access approach"
+          }
+        ]
+      },
+      {
+        "id": "Y04.X001",
+        "name": "adr-feature-flags-config-service",
+        "summary": "Feature flags must live in the config service for gradual rollout, never as code constants, and must be cleaned up after use per the house rules.",
+        "readWhen": "adding or removing a feature flag, or deciding where flag state should be stored",
+        "links": [
+          {
+            "to": "Y04",
+            "rel": "implements",
+            "note": "records the decision to store flags in the config service"
+          },
+          {
+            "to": "Y00",
+            "rel": "see-also",
+            "note": "cleanup requirement points to the house rules"
+          }
+        ]
+      }
+    ]
+  }
+}

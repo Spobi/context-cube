@@ -1,0 +1,12 @@
+# Append-only files: keep both sides' lines when branches merge.
+.state/retired.txt merge=union
+.state/aliases.txt merge=union
+.state/approvals.log merge=union
+# Generated files never block a merge: the tool rebuilds them afterwards.
+CUBE.md merge=cube-generated linguist-generated=true
+**/ROW.md merge=cube-generated linguist-generated=true
+**/ROW-p*.md merge=cube-generated linguist-generated=true
+# Drawers merge their own text; generated sections are rebuilt. Box state keeps the newer side.
+Y*/X*/Z*.md merge=cube-drawer
+.state/boxes/*.json merge=cube-state
+.tool/cube.mjs linguist-generated=true -diff

@@ -1,0 +1,92 @@
+{
+  "step": "invariant-labels",
+  "tier": "sonnet",
+  "output": {
+    "topics": [
+      {
+        "id": "Y02.X001",
+        "name": "ordered-edit-replay",
+        "label": "Ordered edit replay: each device replays its queued edits by its own sequence number, never out of order",
+        "scope": "The offline edit queue and replay logic in src/sync (queue.ts), and any client-side merge logic that applies queued edits",
+        "readWhen": "Before changing how queued edits are ordered, replayed, or merged, before changing batching/upload logic that could reorder edits, or before writing/updating sync tests about edit ordering",
+        "governs": [
+          {
+            "to": "Y03.X001",
+            "note": "replay must apply edits strictly in the device's own sequence-number order"
+          },
+          {
+            "to": "Y03",
+            "note": "sync engine as a whole must never reorder queued edits during replay or upload"
+          },
+          {
+            "to": "Y04",
+            "note": "sync tests must assert edits are applied in sequence order, not arrival order"
+          }
+        ]
+      },
+      {
+        "id": "Y02.X002",
+        "name": "server-never-rewrites-history",
+        "label": "Server never rewrites history: the server only stores edits — clients do all merging, squashing, and reordering",
+        "scope": "Server-side edit storage/upload endpoints and any batching logic in src/sync that sends edits to the server",
+        "readWhen": "Before adding server-side merging, squashing, or reordering of edits, before changing upload batching that could combine or reorder edits, or before changing client merge logic that assumes an untouched server history",
+        "governs": [
+          {
+            "to": "Y03",
+            "note": "server/upload path must persist edits as-is, never merge or reorder them"
+          },
+          {
+            "to": "Y03.X003",
+            "note": "batched uploads must preserve each edit distinctly, not squash them into a merged history"
+          },
+          {
+            "to": "Y04",
+            "note": "tests must verify stored server history isn't altered or reordered"
+          }
+        ]
+      },
+      {
+        "id": "Y02.X003",
+        "name": "thirty-day-tombstone-retention",
+        "label": "30-day tombstone retention: delete markers persist 30 days so long-offline devices learn about deletes",
+        "scope": "Tombstone storage and expiry logic in src/sync/tombstones.ts and any code that purges or reads tombstones",
+        "readWhen": "Before changing TOMBSTONE_DAYS or tombstone expiry/purge logic, before changing assumptions about the longest supported offline gap, or before writing/updating tests covering deletes or tombstones",
+        "governs": [
+          {
+            "to": "Y03.X002",
+            "note": "TOMBSTONE_DAYS must stay fixed at 30 per this invariant, changed only after checking offline-gap analytics"
+          },
+          {
+            "to": "Y03",
+            "note": "sync engine's delete/tombstone handling must respect the 30-day retention window"
+          },
+          {
+            "to": "Y04",
+            "note": "tests must cover long-offline-gap scenarios to prevent resurrected deleted notes"
+          }
+        ]
+      },
+      {
+        "id": "Y02.X004",
+        "name": "monotonic-sequence-numbers",
+        "label": "Monotonic sequence numbers: a device's sequence number only increases, even after reinstall, seeded from the server",
+        "scope": "Sequence-number generation and seeding for devices within the sync engine, used to order queued edits",
+        "readWhen": "Before changing how sequence numbers are generated, how they are re-seeded after reinstall or on a new device, or before writing/updating tests for edit ordering or replay",
+        "governs": [
+          {
+            "to": "Y03.X001",
+            "note": "replay ordering relies on sequence numbers that never repeat or go backward"
+          },
+          {
+            "to": "Y03",
+            "note": "sync engine must seed sequence numbers from the server on reinstall, never reset to zero"
+          },
+          {
+            "to": "Y04",
+            "note": "tests must cover reinstall/re-seed scenarios for sequence numbers"
+          }
+        ]
+      }
+    ]
+  }
+}

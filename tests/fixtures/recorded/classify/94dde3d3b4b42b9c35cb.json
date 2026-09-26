@@ -1,0 +1,58 @@
+{
+  "step": "classify",
+  "tier": "haiku",
+  "output": {
+    "files": [
+      {
+        "path": "CLAUDE.md",
+        "role": "mixed",
+        "confidence": "high",
+        "sections": [
+          {
+            "startLine": 3,
+            "role": "rules"
+          },
+          {
+            "startLine": 8,
+            "role": "history"
+          },
+          {
+            "startLine": 14,
+            "role": "notes"
+          }
+        ],
+        "why": "Holds standing work instructions (test before commit, pull requests), recent dated changes (batched uploads, offline queue), and lessons learned from past issues."
+      },
+      {
+        "path": "CONSTITUTION.md",
+        "role": "invariants",
+        "confidence": "high",
+        "sections": [],
+        "why": "Load-bearing rules that must never be broken because each corruption corrupts notes or causes device sync failures, with explicit consequences stated."
+      },
+      {
+        "path": "NOTES.md",
+        "role": "mixed",
+        "confidence": "high",
+        "sections": [
+          {
+            "startLine": 3,
+            "role": "rules"
+          },
+          {
+            "startLine": 7,
+            "role": "history"
+          }
+        ],
+        "why": "Holds coding conventions (component structure, function arguments) and a dated log of work changes (sync worker thread, conflict highlighting)."
+      },
+      {
+        "path": "README.md",
+        "role": "other",
+        "confidence": "high",
+        "sections": [],
+        "why": "User-facing README with project description and installation/run instructions, not project memory."
+      }
+    ]
+  }
+}

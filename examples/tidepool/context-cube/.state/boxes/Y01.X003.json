@@ -1,0 +1,34 @@
+{
+  "id": "Y01.X003",
+  "created": "2026-09-24T12:25:56.571Z",
+  "updated": "2026-09-24T12:25:56.654Z",
+  "drawers": {
+    "Z0": {
+      "sha": "e3b0c44298fc1c14",
+      "chars": 0
+    },
+    "Z4": {
+      "sha": "81c3620ea0550bda",
+      "chars": 88
+    }
+  },
+  "sources": [
+    {
+      "file": "CLAUDE.md",
+      "start": 11,
+      "end": 13,
+      "drawer": 4,
+      "wrapped": false
+    }
+  ],
+  "date": "2026-08-02",
+  "historyKey": "2026-08-02",
+  "generated": {
+    "Z1": "b254bf902c118dd6",
+    "Z4": "7c019744395e4472"
+  },
+  "code": {
+    "files": [],
+    "commits": []
+  }
+}

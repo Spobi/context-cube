@@ -1,0 +1,9 @@
+# Legacy references and old coordinates → current coordinates. alias<TAB>target
+2026-08-14	Y01.X004
+2026-08-02	Y01.X003
+§1	Y02.X001
+§2	Y02.X002
+§3	Y02.X003
+§4	Y02.X004
+2026-07-20	Y01.X002
+2026-07-11	Y01.X001

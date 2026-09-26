@@ -1,0 +1,27 @@
+{
+  "id": "Y03.X000",
+  "created": "2026-09-24T12:25:56.556Z",
+  "updated": "2026-09-24T12:25:56.597Z",
+  "drawers": {
+    "Z0": {
+      "sha": "e3b0c44298fc1c14",
+      "chars": 0
+    },
+    "Z4": {
+      "sha": "f9fbeea6922e2c47",
+      "chars": 160
+    }
+  },
+  "sources": [
+    {
+      "file": "CLAUDE.md",
+      "start": 14,
+      "end": 14,
+      "drawer": 4,
+      "wrapped": true
+    }
+  ],
+  "generated": {
+    "Z2": "01c389a75edc9966"
+  }
+}

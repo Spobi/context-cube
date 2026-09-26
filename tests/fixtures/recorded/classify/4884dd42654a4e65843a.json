@@ -1,0 +1,38 @@
+{
+  "step": "classify",
+  "tier": "haiku",
+  "output": {
+    "files": [
+      {
+        "path": "HOUSERULES.md",
+        "role": "rules",
+        "confidence": "high",
+        "why": "Standing instructions for how the team works: limits on PRs, deployment timing, and database practices that developers must follow."
+      },
+      {
+        "path": "README.md",
+        "role": "other",
+        "confidence": "high",
+        "why": "Project description written for end users, explaining what Harbor is; not AI memory about how to work on it."
+      },
+      {
+        "path": "docs/decisions/0001-use-postgres.md",
+        "role": "notes",
+        "confidence": "high",
+        "why": "Architecture decision record documenting why Postgres was chosen and its consequences; a decision record is project memory for future work."
+      },
+      {
+        "path": "docs/decisions/0002-feature-flags.md",
+        "role": "notes",
+        "confidence": "high",
+        "why": "Architecture decision record explaining the choice to centralize feature flags in the config service; same kind of ADR as 0001."
+      },
+      {
+        "path": "docs/decisions/0003-no-orm.md",
+        "role": "notes",
+        "confidence": "high",
+        "why": "Architecture decision record documenting the choice to write SQL by hand; same kind of ADR as 0001 and 0002."
+      }
+    ]
+  }
+}

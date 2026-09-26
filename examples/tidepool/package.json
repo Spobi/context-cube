@@ -1,0 +1,1 @@
+{"name":"tidepool","version":"1.4.0","scripts":{"test":"vitest","start":"vite"}}

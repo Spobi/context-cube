@@ -1,0 +1,4 @@
+# Keeps Context Cube's bookkeeping out of code searches (ripgrep and tools built on it).
+.state/
+.tool/
+.logs/

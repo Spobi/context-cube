@@ -1,0 +1,36 @@
+{
+  "id": "Y00.X001",
+  "created": "2026-09-24T12:25:56.564Z",
+  "updated": "2026-09-24T12:25:56.564Z",
+  "drawers": {
+    "Z0": {
+      "sha": "7f4812b5f7bc99ba",
+      "chars": 38
+    }
+  },
+  "sources": [
+    {
+      "file": "CLAUDE.md",
+      "start": 4,
+      "end": 4,
+      "drawer": 0
+    }
+  ],
+  "code": {
+    "files": [
+      {
+        "path": "package.json",
+        "why": "`test` (line 1)"
+      }
+    ]
+  },
+  "names": [
+    "test"
+  ],
+  "fingerprints": {
+    "package.json": "daaecb3dedf2b147"
+  },
+  "generated": {
+    "Z2": "8e32290e73481b63"
+  }
+}

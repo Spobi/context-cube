@@ -1,0 +1,32 @@
+{
+  "step": "recipe",
+  "tier": "sonnet",
+  "output": {
+    "version": 1,
+    "sources": [
+      {
+        "path": "CHANGELOG.md",
+        "sections": [
+          {
+            "startLine": 1,
+            "kind": "history",
+            "split": {
+              "mode": "heading",
+              "level": 2
+            },
+            "key": "^##\\s+\\[(\\d+\\.\\d+\\.\\d+)\\]",
+            "date": "^##\\s+\\[[\\d.]+\\]\\s*-\\s*(\\d{4}-\\d{2}-\\d{2})",
+            "order": "newest-first"
+          }
+        ]
+      }
+    ],
+    "refs": [
+      {
+        "pattern": "introduced in (\\d+\\.\\d+\\.\\d+)",
+        "kind": "history",
+        "note": "Fixed entries reference the version that introduced the bug"
+      }
+    ]
+  }
+}

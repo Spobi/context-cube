@@ -1,0 +1,20 @@
+{
+  "step": "classify",
+  "tier": "haiku",
+  "output": {
+    "files": [
+      {
+        "path": "AGENTS.md",
+        "role": "rules",
+        "confidence": "high",
+        "why": "Standing instructions for developers and AI agents on how to work in this project, including conventions and requirements marked with 'never' and 'every'."
+      },
+      {
+        "path": "CHANGELOG.md",
+        "role": "history",
+        "confidence": "high",
+        "why": "A dated record of changes to the project over time, organized by version numbers and dates, documenting what was added and fixed in each release."
+      }
+    ]
+  }
+}

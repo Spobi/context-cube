@@ -1,0 +1,72 @@
+{
+  "step": "history-summaries",
+  "tier": "haiku",
+  "output": {
+    "entries": [
+      {
+        "id": "Y01.X073",
+        "name": "export-73-empty-report-crash",
+        "summary": "Added export option 73 for report screen. Fixed crash when opening empty reports from version 2.7.2.",
+        "readWhen": "Before changing export functionality, or when opening empty reports crashes",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X074",
+        "name": "export-74-empty-report-crash",
+        "summary": "Added export option 74 for report screen. Fixed crash when opening empty reports from version 2.7.3.",
+        "readWhen": "Before changing export functionality, or when opening empty reports crashes",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X075",
+        "name": "export-75-shortcut-crash",
+        "summary": "Added export option 75 and keyboard shortcut. Fixed crash when opening empty reports from version 2.7.4.",
+        "readWhen": "Before changing export functionality or keyboard shortcuts, or when opening empty reports crashes",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X076",
+        "name": "export-76-empty-report-crash",
+        "summary": "Added export option 76 for report screen. Fixed crash when opening empty reports from version 2.7.5.",
+        "readWhen": "Before changing export functionality, or when opening empty reports crashes",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X077",
+        "name": "export-77-empty-report-crash",
+        "summary": "Added export option 77 for report screen. Fixed crash when opening empty reports from version 2.7.6.",
+        "readWhen": "Before changing export functionality, or when opening empty reports crashes",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X078",
+        "name": "export-78-shortcut-crash",
+        "summary": "Added export option 78 and keyboard shortcut. Fixed crash when opening empty reports from version 2.7.7.",
+        "readWhen": "Before changing export functionality or keyboard shortcuts, or when opening empty reports crashes",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X079",
+        "name": "export-79-empty-report-crash",
+        "summary": "Added export option 79 for report screen. Fixed crash when opening empty reports from version 2.7.8.",
+        "readWhen": "Before changing export functionality, or when opening empty reports crashes",
+        "touches": [],
+        "projectWide": true
+      },
+      {
+        "id": "Y01.X080",
+        "name": "export-80-empty-report-crash",
+        "summary": "Added export option 80 for report screen. Fixed crash when opening empty reports from version 2.7.9.",
+        "readWhen": "Before changing export functionality, or when opening empty reports crashes",
+        "touches": [],
+        "projectWide": true
+      }
+    ]
+  }
+}
