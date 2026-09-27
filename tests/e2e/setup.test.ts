@@ -209,4 +209,20 @@ describe("npx context-cube on each fixture", () => {
     for (const f of ["CLAUDE.md", "CONSTITUTION.md", "NOTES.md"]) expect(readFileSync(join(root, "context-cube/.state/archive", f), "utf8")).toBe(fx.constitutionNotes[f]);
     await passes(root);
   });
+
+  it("running it again offers the rule rewrites a build couldn't ask about", async () => {
+    const { root } = await runSetup(fx.constitutionNotes, { yes: false });
+    const log: string[] = [];
+    const out = (await setup({ cwd: root, yes: true, ask: scriptedAsker({}, log), backend: recordedBackend() })).join("\n");
+    expect(log).toContain("? Rewrite them to point at the cube? (The original words stay in the cube; they just stop loading.)");
+    expect(out).toContain("Rewrote 1 rule to point at the cube");
+    const block = readFileSync(join(root, "CLAUDE.md"), "utf8");
+    expect(block).not.toContain("Read CONSTITUTION.md before touching the sync engine.");
+    expect(block).toContain("Read the cube's invariants row (Y02) before touching the sync engine.");
+    await passes(root);
+    // Once rewritten, there's nothing left to offer.
+    const again: string[] = [];
+    await setup({ cwd: root, yes: true, ask: scriptedAsker({}, again), backend: recordedBackend() });
+    expect(again.some((l) => l.includes("Rewrite them"))).toBe(false);
+  });
 });

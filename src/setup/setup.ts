@@ -261,18 +261,7 @@ async function handleOriginals(root: string, ask: Asker, allowed: boolean): Prom
   const recipe = loadRecipe(root);
   const sources = recipe?.sources.map((s) => s.path) ?? [];
   if (!sources.length) return;
-  const homes = sourceHomes(root, sources);
-
-  const rewrites = ruleRewrites(root, homes);
-  if (rewrites.length) {
-    say(ask, `\n${rewrites.length} rule${rewrites.length === 1 ? " points" : "s point"} at files whose content is now in the cube:`);
-    for (const r of rewrites.slice(0, 8)) say(ask, `  ${r.box}: ${r.oldText.trim().split("\n")[0].slice(0, 110)}\n     → ${r.newText.trim().split("\n")[0].slice(0, 110)}`);
-    if (rewrites.length > 8) say(ask, `  …and ${rewrites.length - 8} more`);
-    if (allowed && (await ask.confirm("Rewrite them to point at the cube? (The original words stay in the cube; they just stop loading.)", true, "rewrite-rules"))) {
-      const created = applyRuleRewrites(root, rewrites);
-      say(ask, `  Rewrote ${created.length}.`);
-    }
-  }
+  await offerRuleRewrites(root, ask, allowed, sources);
 
   // Archive the originals without asking: nothing is lost, one command puts any back,
   // and the agent stops reading the same things twice. finish() tells the person where they are.
@@ -283,6 +272,27 @@ async function handleOriginals(root: string, ask: Asker, allowed: boolean): Prom
     for (const s of r.skipped) say(ask, `  Left ${s.path} in place: ${s.why}.`);
   }
   await reindex(root);
+}
+
+/**
+ * Rules that point at files whose content is in the cube ("update HISTORY.md")
+ * would send agents to a placeholder that says to add to the cube instead.
+ * Offers to rewrite them to point at the cube; needs the person's yes.
+ */
+async function offerRuleRewrites(root: string, ask: Asker, allowed: boolean, sources: string[]): Promise<number> {
+  const rewrites = ruleRewrites(root, sourceHomes(root, sources));
+  if (!rewrites.length) return 0;
+  say(ask, `\n${rewrites.length} rule${rewrites.length === 1 ? " points" : "s point"} at files whose content is now in the cube:`);
+  for (const r of rewrites.slice(0, 8)) say(ask, `  ${r.box}: ${r.oldText.trim().split("\n")[0].slice(0, 110)}\n     → ${r.newText.trim().split("\n")[0].slice(0, 110)}`);
+  if (rewrites.length > 8) say(ask, `  …and ${rewrites.length - 8} more`);
+  if (!allowed) {
+    say(ask, "  (Left as they are: rewriting your rules needs your yes. Run this again in a terminal, or with --yes, to rewrite them.)");
+    return 0;
+  }
+  if (!(await ask.confirm("Rewrite them to point at the cube? (The original words stay in the cube; they just stop loading.)", true, "rewrite-rules"))) return 0;
+  const created = applyRuleRewrites(root, rewrites);
+  say(ask, `  Rewrote ${created.length}.`);
+  return created.length;
 }
 
 /** A cube is already here: bring it up to date instead of rebuilding (plan 7.1). */
@@ -304,6 +314,10 @@ async function updateExisting(root: string, ask: Asker, opts: SetupOptions, pf: 
   }
   const tool = installTool(root);
   if (addCodex) addAgents(root, ["codex"]);
+  // Rules still pointing at archived files contradict their placeholders (a build that
+  // couldn't ask, say): offer the rewrite the build would have. The block is rebuilt below.
+  const archivedSources = (loadRecipe(root)?.sources.map((s) => s.path) ?? []).filter((p) => isArchived(root, p));
+  const rewrote = archivedSources.length ? await offerRuleRewrites(root, ask, ask.interactive || !!opts.yes || !!ask.relay, archivedSources) : 0;
   linkCodeForStale(root);
   const marked = applyStatus(root, computeStatus(root));
   const installed = await installAgents(root, undefined, { shared });
@@ -311,6 +325,7 @@ async function updateExisting(root: string, ask: Asker, opts: SetupOptions, pf: 
   return [
     ...(tool.updatedFrom ? [`Updated the project's copy of Context Cube from ${tool.updatedFrom} to ${version()}. Commit context-cube/ so teammates get it too.`] : []),
     `Updated: ${cube.rows.length} rows, ${allBoxes(cube).filter((b) => !b.isRoot).length} boxes${marked ? `; ${marked} box${marked === 1 ? " is" : "es are"} now marked stale or needs-review (see: ${TOOL_COMMAND} status)` : ""}.`,
+    ...(rewrote ? [`Rewrote ${rewrote} rule${rewrote === 1 ? "" : "s"} to point at the cube (the original words are kept, no longer loaded).`] : []),
     "Hooks, path rules, and the always-loaded block are current.",
     ...(addCodex ? installed.filter((l) => l.startsWith("codex:") || l.startsWith("  Codex")) : []),
   ];

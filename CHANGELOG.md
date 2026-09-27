@@ -2,6 +2,10 @@
 
 To update a project, run `npx context-cube@latest` in it, then commit `context-cube/` so teammates get the same version.
 
+## 0.3.1 (2026-09-27)
+
+- **Running setup again offers the rule rewrites a build couldn't ask about.** A build run without a terminal and without `--yes` archived the original files but left rules like "Update `HISTORY.md`" as they were, so agents got that rule and a placeholder in `HISTORY.md` saying to add to the cube instead. Now updating an existing cube finds rules that still point at archived files and offers to rewrite them to point at the cube (the original words are kept, no longer loaded). It needs your yes, as before.
+
 ## 0.3.0 (2026-09-27)
 
 - **Codex reads the cube.** Codex gets the always-loaded block in `AGENTS.md` and its own hooks in `.codex/hooks.json`: the guard (it reads which files an `apply_patch` changes, so invariant text and the cube's bookkeeping are protected as in Claude Code), the session notice, and update requests. Codex has no path-scoped rule files, so the guard tells the agent which invariants govern a file before it edits it or after it prints it through the shell. Commands that need a person get Codex command rules (`.codex/rules/context-cube.rules`) that make Codex ask, since its hooks can't; the guard blocks such a command written so the rules could miss it. A `cube-updater` custom agent and a `cube-update` skill do the updates. Setup includes Codex when it runs in a Codex session, when the project has `.codex/`, or when you say yes; `cube install --agent codex` adds it to an existing cube, and `cube uninstall --agent codex` removes it. Codex runs a project's hooks only after each person trusts its `.codex/` folder (`/hooks`). Building a cube from existing files still needs Claude Code.
