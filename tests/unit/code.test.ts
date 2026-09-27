@@ -9,7 +9,8 @@ import { linkCode, mentions, commitsForKey } from "../../src/core/code/links";
 import { computeStatus } from "../../src/core/code/status";
 import { sessionNotice } from "../../src/core/code/notice";
 import { getBox, loadCube, readDrawer } from "../../src/core/cube";
-import { commitAll, tempProject } from "../helpers";
+import { commitAll, FIXED_GIT_ENV, tempProject } from "../helpers";
+import { spawnSync } from "node:child_process";
 
 async function project() {
   const root = tempProject({
@@ -66,6 +67,29 @@ describe("code links", () => {
     const rule = readFileSync(join(root, ".claude/rules/cube-Y02-X001.md"), "utf8");
     expect(rule).toMatch(/^---\npaths:\n  - "src\/call\/clock\.swift"\n  - "src\/call\/ring\.swift"\n---\n/);
     expect(rule).toContain("Context Cube: before editing this file, open invariant Y02.X001, a rule that must never be broken:");
+  });
+});
+
+describe("history dates", () => {
+  it("dates an entry without its own date by the first commit naming it, or when its heading was added", async () => {
+    const root = await project();
+    const st = (id: string) => JSON.parse(readFileSync(join(root, `context-cube/.state/boxes/${id}.json`), "utf8"));
+    // "1.0.8 (6)" is named by a commit made on 2026-01-01.
+    expect(st("Y01.X001")).toMatchObject({ date: "2026-01-01", dateFrom: "commits" });
+    // An entry no commit names: when its heading went into HISTORY.md.
+    writeFileSync(join(root, "HISTORY.md"), "## 1.0.9 — Faster start\nStarts faster.\n");
+    spawnSync("git", ["add", "-A"], { cwd: root });
+    spawnSync("git", ["commit", "-qm", "notes"], { cwd: root, env: { ...process.env, ...FIXED_GIT_ENV, GIT_AUTHOR_DATE: "2026-03-04T12:00:00Z", GIT_COMMITTER_DATE: "2026-03-04T12:00:00Z" } });
+    const box = createBox(root, 1, { name: "faster-start", summary: "Faster start.", readWhen: "Debugging start-up.", drawers: { 4: "## 1.0.9 — Faster start\nStarts faster.\n" }, source: "HISTORY.md L1-L2" });
+    const s = st(box.id);
+    writeFileSync(join(root, `context-cube/.state/boxes/${box.id}.json`), JSON.stringify({ ...s, date: "2025-12-01", dateFrom: "inferred", sources: [{ file: "HISTORY.md", start: 1, end: 2, drawer: 4 }] }));
+    linkCode(root, [box.id]);
+    expect(st(box.id)).toMatchObject({ date: "2026-03-04", dateFrom: "file" });
+    // A date the entry gives itself stays.
+    const dated = createBox(root, 1, { name: "dated", summary: "Dated.", readWhen: "Never.", drawers: { 4: "## 1.1.0 — 2026-05-05\nShipped.\n" } });
+    writeFileSync(join(root, `context-cube/.state/boxes/${dated.id}.json`), JSON.stringify({ ...st(dated.id), date: "2026-05-05", dateFrom: "text" }));
+    linkCode(root, [dated.id]);
+    expect(st(dated.id).date).toBe("2026-05-05");
   });
 });
 

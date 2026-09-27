@@ -104,6 +104,29 @@ describe("the full build with a scripted AI", () => {
     expect(allBoxes(cube).filter((b) => b.header?.source?.startsWith("docs/RUNBOOK.md"))).toHaveLength(6);
   });
 
+  it("asks about rules that are headed sections of a document even under the ceiling, but not a short list of house rules", async () => {
+    const release = "# Release\n\n## Build\nBump the build number.\n\n## Upload\nUpload with the release script.\n";
+    const root = tempProject({ ...files, "docs/RELEASE.md": release, "HOUSE.md": "# House rules\n\n- Tabs, not spaces.\n" });
+    commitAll(root);
+    const backend = new FakeBackend((c) => {
+      const a = answer(c) as any;
+      if (c.step === "classify") for (const f of a.files) if (f.path === "docs/RELEASE.md" || f.path === "HOUSE.md") f.role = "rules";
+      if (c.step === "recipe" && c.prompt.includes("## Source: docs/RELEASE.md")) a.sources.push({ path: "docs/RELEASE.md", sections: [{ startLine: 1, kind: "rules", split: { mode: "heading", level: 2 } }] });
+      if (c.step === "recipe" && c.prompt.includes("## Source: HOUSE.md")) a.sources.push({ path: "HOUSE.md", sections: [{ startLine: 1, kind: "rules", split: { mode: "items" } }] });
+      return a;
+    });
+    const log: string[] = [];
+    await build({ cwd: root, ask: scriptedAsker({}, log), backend });
+    const text = log.join("\n");
+    expect(text).toMatch(/2 of the rules found are sections of a file that isn't agent instructions, and read more like plans or procedures than rules for every task\./);
+    expect(text).toContain('docs/RELEASE.md: 2 (');
+    expect(text).not.toContain("HOUSE.md: ");
+    const rules = loadCube(root).rows[0].boxes.map((b) => b.doc!.body);
+    expect(rules).toContain("- Tabs, not spaces.\n");
+    expect(rules.some((r) => r.includes("Bump the build number"))).toBe(false);
+    expect(placedCoverage(root, ["docs/RELEASE.md", "HOUSE.md"]).every((c) => c.ok)).toBe(true);
+  });
+
   it("orders history across files by date, keeping each file's own order", () => {
     const c = (source: string, start: number, date?: string): Chunk => ({ id: `${source}#${start}`, source, section: 0, kind: "history", role: "entry", start, end: start, text: "", date });
     const recipeLike = { version: 1 as const, refs: [], sources: [

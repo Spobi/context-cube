@@ -2,6 +2,14 @@
 
 To update a project, run `npx context-cube@latest` in it, then commit `context-cube/` so teammates get the same version.
 
+## 0.2.5 (2026-09-26)
+
+- **The guard lets read-only commands through.** It treated any `>` in a command that named a protected file as a write, so `2>/dev/null`, `2>&1`, or output sent to `/tmp` blocked a plain read, and so did any `python3`. Now a redirect counts only when it points at a protected file, `cp` only when it copies into one, and a script only when it looks like it writes.
+- **Nothing becomes an always-loaded rule without a person's say.** The build now asks about rules that are headed sections or long entries of a document that isn't agent instructions (a plan's sections, a runbook) even under the ceiling, and `cube new-box` in the rules row refuses a rule that would put the block over its ceiling (a person can raise it with `cube config set limits.blockTokens`).
+- **`cube move` asks for a new read-when** (`--read-when`) when a rule, read "Always.", leaves the rules row, instead of leaving it to be fixed after.
+- **`cube check` flags numbers in an AI-written summary that its box's text doesn't have** (a figure from a neighboring entry, a misread migration number).
+- **History entries without their own date get one from git:** the first commit whose message names the entry, or else when its first line first appeared in the project's markdown. Before, they took a neighboring entry's date. Existing cubes get the new dates the next time code links are refreshed (`cube links`, or running setup again).
+
 ## 0.2.4 (2026-09-26)
 
 - **`cube check` no longer calls an old alias broken when its box moved.** An alias like "4.1" pointing at a box that `cube move` renumbered still resolved (aliases chain), but the check looked only one step and warned.

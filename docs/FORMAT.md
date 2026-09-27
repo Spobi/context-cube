@@ -141,6 +141,10 @@ Once a cube holds a source file's text word for word, the original may be archiv
 - The archive's `.records/` folder isn't a source file's path: it holds records a person replaced or deleted (see Records), and a tool doesn't list or restore it as a source.
 - Restoring moves the original back (keeping the always-loaded block) and removes it from the archive. Text found in a placeholder file outside its markers was added after archiving and isn't in the cube; a tool reports it and doesn't overwrite it.
 
+## History dates
+
+A history entry's date (in its state, shown in its past-record note) comes from, in order: the entry's own text (a date in its first line), the first commit whose message names the entry's key (such as "1.0.8 (6)"), the commit where the entry's first line first appeared in the project's markdown (it may have moved between files since), and only then the date of the entry before it in its file. The state's `dateFrom` says which (`text`, `commits`, `file`, `inferred`).
+
 ## Open history entries
 
 One history entry at a time has `status: open`. Additions go in its `fragments/` folder, one file each, named by time and person (`2026-09-24T1512-jordan.md`; a second one in the same minute, `2026-09-24T1512.02-jordan.md`), so two people never edit the same file, and the names sort in the order they were written. The open entry's Z4 is a generated section built from its fragments; closing the entry makes them its Z4 for good.

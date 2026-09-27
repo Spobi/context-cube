@@ -263,7 +263,8 @@ async function place(ctx: BuildContext, state: BuildState) {
   histIds.forEach((id, i) => {
     const date = effectiveDate(groups[i][0].id) ?? groups[i][0].date;
     const st = loadBoxState(root, id);
-    if (st && date) saveBoxState(root, { ...st, date, historyKey: groups[i][0].key });
+    // An entry without a date of its own takes its neighbor's for now; code links look for better (commits).
+    if (st && date) saveBoxState(root, { ...st, date, dateFrom: groups[i][0].date ? "text" : "inferred", historyKey: groups[i][0].key });
   });
 
   // Invariants → Y02: the text is Z1, word for word. Each part of a long topic is its own box.

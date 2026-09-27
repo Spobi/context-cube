@@ -59,10 +59,68 @@ export function protectedReason(root: string, file: string): string | undefined 
 }
 
 const PROTECTED_IN_BASH = /(context-cube\/(?:cube\.config\.json|\.state\/|\.tool\/)|Z1-invariants\.md)/;
-const WRITES_IN_BASH = /(>|\btee\b|\bsed\s+(-\w*\s+)*-i|\bperl\s+(-\w*\s+)*-i|\bmv\b|\bcp\b|\brm\b|\btruncate\b|\bdd\b|\bpython3?\b|\bnode\s+-e\b|\bruby\s+-e\b)/;
+/** Commands that change the files they're given. */
+const WRITER_VERBS = /\btee\b|\bsed\s+(-\w*\s+)*-i|\bperl\s+(-\w*\s+)*-i|\bmv\b|\brm\b|\btruncate\b|\bdd\b|\bln\b|\btouch\b|\bchmod\b|\binstall\s/;
+/** A script can write anything; it counts as a writer when its text looks like it writes. */
+const SCRIPTS = /\b(?:python3?|node|ruby|perl|php|deno|bun)\b/;
+const SCRIPT_WRITES = /open\([^)]*['"][wax+]|\.write\(|write_text|write_bytes|writeFile|appendFile|createWriteStream|rmSync|unlink|rename|rmtree|os\.remove|shutil\.|truncate|File\.write|IO\.write/;
 const PERSON_ONLY = /(?:cube(?:\.mjs)?|context-cube)["']?\s+(config\s+set|approve|reject|restore|replace)\b/;
 const DELETE_AT = /(?:cube(?:\.mjs)?|context-cube)["']?\s+delete\b/g;
 const ARCHIVE_IN_BASH = /context-cube\/\.state\/archive\b/;
+
+/**
+ * Where a shell command's output redirections go, outside quotes: `> f`,
+ * `>> f`, `2> f`, `&> f`, `>| f`. Not `2>&1` or `>&2` (another descriptor),
+ * and not `/dev/null`. A process substitution `>(…)` counts as "(" (unknown).
+ */
+export function redirectTargets(cmd: string): string[] {
+  const out: string[] = [];
+  let quote: string | undefined;
+  for (let i = 0; i < cmd.length; i++) {
+    const ch = cmd[i];
+    if (quote) {
+      if (ch === quote) quote = undefined;
+      else if (ch === "\\" && quote === '"') i++;
+      continue;
+    }
+    if (ch === "'" || ch === '"') quote = ch;
+    else if (ch === "\\") i++;
+    else if (ch === ">") {
+      let j = i + 1;
+      if (cmd[j] === ">" || cmd[j] === "|") j++;
+      if (cmd[j] === "&") {
+        i = j;
+        continue;
+      }
+      if (cmd[j] === "(") {
+        out.push("(");
+        i = j;
+        continue;
+      }
+      while (cmd[j] === " " || cmd[j] === "\t") j++;
+      const target = commandWords(cmd.slice(j))[0] ?? "";
+      if (target && target !== "/dev/null") out.push(target);
+      i = j;
+    }
+  }
+  return out;
+}
+
+/** The protected file a shell command would change, if it would change one. Reading one is fine. */
+export function protectedWrite(cmd: string): string | undefined {
+  const redirected = redirectTargets(cmd).find((t) => t === "(" || PROTECTED_IN_BASH.test(t));
+  if (redirected) return redirected === "(" ? PROTECTED_IN_BASH.exec(cmd)?.[1] : PROTECTED_IN_BASH.exec(redirected)![1];
+  const named = PROTECTED_IN_BASH.exec(cmd)?.[1];
+  if (!named) return undefined;
+  if (WRITER_VERBS.test(cmd)) return named;
+  // `cp` changes only where it copies to: its last argument.
+  for (const m of cmd.matchAll(/\bcp\b/g)) {
+    const dest = commandWords(cmd.slice(m.index! + 2)).filter((w) => !w.startsWith("-")).pop();
+    if (dest && PROTECTED_IN_BASH.test(dest)) return named;
+  }
+  if (SCRIPTS.test(cmd) && SCRIPT_WRITES.test(cmd)) return named;
+  return undefined;
+}
 
 /** The shell words from here to the end of one simple command (an unquoted ; & | ) or newline), quotes removed. */
 function commandWords(s: string): string[] {
@@ -164,8 +222,8 @@ registerHookHandler(async (event, input, root, features): Promise<HookOutcome | 
   const cmd = String(ti.command ?? "");
   const usesTool = /context-cube\/\.tool\/cube\.mjs|\bcube\s|npx\s+context-cube/.test(cmd);
   if (ARCHIVE_IN_BASH.test(cmd) && !usesTool) return { exitCode: 2, stderr: ARCHIVE_REASON };
-  if (PROTECTED_IN_BASH.test(cmd) && WRITES_IN_BASH.test(cmd) && !usesTool) {
-    const file = PROTECTED_IN_BASH.exec(cmd)![1];
+  const file = usesTool ? undefined : protectedWrite(cmd);
+  if (file) {
     const reason = file.startsWith("context-cube")
       ? protectedReason(root, file)
       : `Invariant text can't be changed directly. Write the new Z1 text to a file, then run: ${TOOL_COMMAND} propose edit <box id> --text @<file> --reason "<why>". A person approves it.`;

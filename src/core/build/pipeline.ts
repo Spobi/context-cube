@@ -285,11 +285,13 @@ async function split(ctx: BuildContext, state: BuildState) {
 }
 
 /**
- * Rules load into every session, so they have a ceiling (limits.blockTokens).
- * When the rules found would go over it, the ones from files that aren't agent
- * instructions (a plan's "what we keep" section, a release runbook) are likely
- * plans or procedures. Offer to file them as notes, which the row proposal then
- * places in the rows they're about, where they load only when a task needs them.
+ * Rules load into every session, so they have a ceiling (limits.blockTokens),
+ * and nothing becomes one without a person's say. Rules from files that aren't
+ * agent instructions are offered to be filed as notes instead (placed by the
+ * row proposal in the rows they're about, loading only when a task needs them):
+ * always, when they're headed sections or long entries of a document (a plan's
+ * "what we keep" section, a release runbook), and all of them when the rules
+ * would go over the ceiling. Short listed rules from a house-rules file stay.
  * Returns the changed recipe, or undefined to keep it.
  */
 async function offerRulesAsNotes(ctx: BuildContext, recipe: Recipe, chunks: Chunk[]): Promise<Recipe | undefined> {
@@ -298,23 +300,31 @@ async function offerRulesAsNotes(ctx: BuildContext, recipe: Recipe, chunks: Chun
   const rules = chunks.filter((c) => c.kind === "rules" && c.role === "entry");
   const total = rules.reduce((n, c) => n + tokens(c), 0);
   const limit = config.limits.blockTokens;
-  const movable = rules.filter((c) => !isAgentFile(c.source));
-  if (total <= limit || !movable.length) return undefined;
+  const over = total > limit;
+  const sectionOf = (c: Chunk) => [...(recipe.sources.find((s) => s.path === c.source)?.sections ?? [])].sort((a, b) => a.startLine - b.startLine)[c.section];
+  const planLike = (c: Chunk) => sectionOf(c)?.split.mode !== "items" || tokens(c) > 150;
+  const movable = rules.filter((c) => !isAgentFile(c.source) && (over || planLike(c)));
+  if (!movable.length) return undefined;
   const bySource = new Map<string, Chunk[]>();
   for (const c of movable) bySource.set(c.source, [...(bySource.get(c.source) ?? []), c]);
-  ctx.ask.say(`\nThe rules found would load about ${fmtApprox(total).slice(1)} tokens into every session; the ceiling is about ${fmtApprox(limit).slice(1)}. ${movable.length} of them come from files that aren't agent instructions, so they may be plans or procedures rather than rules for every task:`);
+  const n = movable.length;
+  ctx.ask.say(
+    over
+      ? `\nThe rules found would load about ${fmtApprox(total).slice(1)} tokens into every session; the ceiling is about ${fmtApprox(limit).slice(1)}. ${n} of them come from files that aren't agent instructions, so they may be plans or procedures rather than rules for every task:`
+      : `\n${n} of the rules found ${n === 1 ? "is a section" : "are sections"} of ${bySource.size === 1 ? "a file" : "files"} that ${bySource.size === 1 ? "isn't" : "aren't"} agent instructions, and read more like ${n === 1 ? "a plan or procedure" : "plans or procedures"} than rules for every task. As rules, they'd load into every session (about ${fmtApprox(movable.reduce((m, c) => m + tokens(c), 0)).slice(1)} tokens):`,
+  );
   for (const [path, cs] of bySource) {
-    ctx.ask.say(`  • ${path}: ${cs.length} (${fmtApprox(cs.reduce((n, c) => n + tokens(c), 0))} tokens), such as "${(cs[0].title ?? "").slice(0, 70)}"`);
+    ctx.ask.say(`  • ${path}: ${cs.length} (${fmtApprox(cs.reduce((m, c) => m + tokens(c), 0))} tokens), such as "${(cs[0].title ?? "").slice(0, 70)}"`);
   }
   const ok = await ctx.ask.confirm("File those with the notes instead, in the rows they're about, so they load only when a task needs them?", true);
   if (!ok) return undefined;
+  const asked = new Set(movable.map((c) => sectionOf(c)));
   return {
     ...recipe,
-    sources: recipe.sources.map((s) =>
-      !bySource.has(s.path)
-        ? s
-        : { ...s, sections: s.sections.map((sec) => (sec.kind === "rules" ? { ...sec, kind: "notes" as const, split: sec.split.mode === "items" ? { mode: "whole" as const } : sec.split } : sec)) },
-    ),
+    sources: recipe.sources.map((s) => ({
+      ...s,
+      sections: s.sections.map((sec) => (asked.has(sec) ? { ...sec, kind: "notes" as const, split: sec.split.mode === "items" ? { mode: "whole" as const } : sec.split } : sec)),
+    })),
   };
 }
 

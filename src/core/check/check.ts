@@ -16,6 +16,7 @@ import { TOOL_COMMAND } from "../paths";
 import { alwaysLoadedBlock, ruleText } from "../index/index";
 import { archiveIssues } from "../archive";
 import { recordIssues, renderRecordIssue } from "../records";
+import { drawerOwnText } from "../build/coverage";
 
 export interface Issue {
   level: "error" | "warn";
@@ -63,6 +64,7 @@ export async function runChecks(root: string): Promise<Issue[]> {
   issues.push(...archiveChecks(root));
   issues.push(...recordChecks(root, cube));
   issues.push(...commitChecks(root));
+  issues.push(...summaryNumberChecks(cube));
   for (const c of extraChecks) {
     try {
       issues.push(...(await c.fn(ctx)));
@@ -277,6 +279,41 @@ function blockChecks(root: string, cube: Cube, config: CubeConfig): Issue[] {
 
 function unshortenedBlockTokens(cube: Cube, config: CubeConfig): number {
   return estimateTokens(alwaysLoadedBlock(cube, { ...config, limits: { ...config.limits, blockTokens: Number.MAX_SAFE_INTEGER } }).length, config.tokens.charsPerToken);
+}
+
+/**
+ * The numbers an AI-written summary gives that its box's own text doesn't: a
+ * sign the summary misread the text (a figure from a neighboring entry, or a
+ * rounded one presented as exact). Single digits are left out, since text
+ * often spells them.
+ */
+export function unsupportedNumbers(summary: string, text: string): string[] {
+  const plain = (t: string) => t.replace(/(\d),(\d{3})\b/g, "$1$2");
+  const hay = plain(text);
+  const said = plain(summary.replace(/\[\[[^\]]*\]\]|\bY\d+(?:\.X\d+)?(?:\.Z\d)?\b/g, " "));
+  const nums = [...new Set([...said.matchAll(/\d+(?:\.\d+)*/g)].map((m) => m[0]))].filter((n) => n.length > 1);
+  // "264" in "H.264" counts; "0.8" inside "1.0.8" doesn't; "20" counts for "20.7" (rounded).
+  return nums.filter((n) => !new RegExp(`(?<!\\d|\\d\\.)${n.replace(/\./g, "\\.")}(?!\\d${n.includes(".") ? "|\\.\\d" : ""})`).test(hay));
+}
+
+function summaryNumberChecks(cube: Cube): Issue[] {
+  const out: Issue[] = [];
+  for (const box of allBoxes(cube)) {
+    const h = box.header;
+    if (box.isRoot || !h || h.written_by !== "ai") continue;
+    const text = box.drawers.filter((d) => d.z !== 2).map((d) => drawerOwnText(d.path, d.z)).join("\n");
+    if (!text.trim()) continue;
+    const missing = unsupportedNumbers(h.summary, text);
+    if (!missing.length) continue;
+    out.push({
+      level: "warn",
+      code: "summary-numbers",
+      message: `${box.id}'s summary gives ${missing.map((n) => `"${n}"`).join(", ")}, which ${missing.length === 1 ? "isn't" : "aren't"} in its text. An AI wrote the summary; it may have misread the text.`,
+      id: box.id,
+      fix: `Check the summary against the box's text, then fix it: ${TOOL_COMMAND} edit ${box.id} --summary "<what the text says>"`,
+    });
+  }
+  return out;
 }
 
 /**

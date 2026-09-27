@@ -146,6 +146,15 @@ export function linkCode(root: string, ids?: string[], opts: { keys?: Map<string
       st.fingerprints = undefined;
       st.names = undefined;
       if (mine.length) result.historyWithCommits++;
+      // An entry that doesn't give its own date: when the first commit naming it was made, or else
+      // when its heading was added to its file. Better than the neighbor's date the build assumed.
+      if (!datedByText(box, st)) {
+        const date = mine.length ? mine.map((c) => c.date).filter(Boolean).sort()[0] : addedOn(root, st, box);
+        if (date) {
+          st.date = date;
+          st.dateFrom = mine.length ? "commits" : "file";
+        }
+      }
     } else {
       const linked = linkText(idx, boxText(box));
       st.code = { files: linked.files };
@@ -157,6 +166,27 @@ export function linkCode(root: string, ids?: string[], opts: { keys?: Map<string
     saveBoxState(root, st);
   }
   return result;
+}
+
+/** Whether a history entry's date came from its own text (older cubes: its first line holds that date). */
+function datedByText(box: Box, st: BoxState): boolean {
+  if (st.dateFrom) return st.dateFrom === "text";
+  const first = readTextOr(join(box.dir, DRAWERS[4].file), "").split("\n").find((l) => l.trim() && !l.startsWith("<!--")) ?? "";
+  return !!st.date && first.includes(st.date);
+}
+
+/**
+ * When an entry's first line first appeared in the project's markdown, by git:
+ * the file it came from may since be archived, and the entry may have moved
+ * there from another file (a history split into an archive), so any file counts.
+ */
+function addedOn(root: string, st: BoxState, box: Box): string | undefined {
+  const src = st.sources?.find((s) => s.drawer === 4) ?? st.sources?.[0];
+  if (!src || !gitRoot(root)) return undefined;
+  const first = readTextOr(join(box.dir, DRAWERS[4].file), "").split("\n").find((l) => l.trim() && !l.startsWith("<!--"));
+  if (!first || first.trim().length < 8) return undefined;
+  const r = git(["log", "--format=%ad", "--date=short", "-S", first, "--", "*.md", src.file], root);
+  return r.ok ? r.stdout.trim().split("\n").filter(Boolean).pop() : undefined;
 }
 
 /** A history entry's key from the start of its Z4 or its source label (e.g. "1.0.8 (6)"). */

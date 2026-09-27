@@ -322,7 +322,7 @@ function place(root: string, pieces: Chunk[], holders: { box: Box }[]): string[]
     // Added after everything else the build read, so it's at least as recent as the newest entry.
     const newest = cube.rows.find((r) => r.type === "history")!.boxes.map((b) => loadBoxState(root, b.id)?.date).filter(Boolean).sort().pop();
     const date = c.date ?? newest;
-    if (st && (date || c.key)) saveBoxState(root, { ...st, ...(date ? { date } : {}), ...(c.key ? { historyKey: c.key } : {}) });
+    if (st && (date || c.key)) saveBoxState(root, { ...st, ...(date ? { date, dateFrom: c.date ? ("text" as const) : ("inferred" as const) } : {}), ...(c.key ? { historyKey: c.key } : {}) });
   });
   ids.push(...hist);
 

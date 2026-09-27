@@ -130,6 +130,31 @@ describe("the guard hook", () => {
     expect((await pre(root, "Edit", { file_path: join(root, "src/clock.ts") })).exitCode).toBe(0);
   });
 
+  it("lets read-only commands through, whatever their redirections, and still blocks writes", async () => {
+    const root = await cubeProject();
+    const z1 = join(getBox(loadCube(root), "Y02.X001")!.dir, "Z1-invariants.md");
+    const reads = [
+      "grep -rn clock context-cube/.state/boxes 2>/dev/null | head",
+      `cat ${z1} 2>&1 | head -20`,
+      "jq . context-cube/.state/boxes/Y02.X001.json > /tmp/out.json",
+      "python3 -c \"import json; print(json.load(open('context-cube/.state/boxes/Y02.X001.json')))\"",
+      "cp context-cube/.state/aliases.txt /tmp/aliases.txt",
+      'echo "a > b" && cat context-cube/cube.config.json &>/dev/null',
+    ];
+    for (const command of reads) expect({ command, code: (await pre(root, "Bash", { command })).exitCode }).toEqual({ command, code: 0 });
+    const writes = [
+      "echo x > context-cube/.state/aliases.txt",
+      "cat /tmp/a >> context-cube/cube.config.json",
+      "ls 2> context-cube/.state/err.txt",
+      `printf 'x' >| ${z1}`,
+      "cp /tmp/a context-cube/.state/aliases.txt",
+      "rm context-cube/.state/retired.txt",
+      "python3 -c \"open('context-cube/.state/x.json', 'w').write('{}')\"",
+      "tee context-cube/.state/aliases.txt < /tmp/a",
+    ];
+    for (const command of writes) expect({ command, code: (await pre(root, "Bash", { command })).exitCode }).toEqual({ command, code: 2 });
+  });
+
   it("keeps the agent out of the archive, and makes putting an original back ask a person", async () => {
     const root = await cubeProject();
     const cat = await pre(root, "Bash", { command: "cat context-cube/.state/archive/HISTORY.md" });

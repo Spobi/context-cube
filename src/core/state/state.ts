@@ -120,6 +120,8 @@ export interface BoxState {
   names?: string[];
   /** When the knowledge in this box dates from (YYYY-MM-DD), for "reach" stats. */
   date?: string;
+  /** Where `date` came from: the entry's own text, the first commit naming it, when it was added to its file, or its neighbors in the file. */
+  dateFrom?: "text" | "commits" | "file" | "inferred";
   /** History entries built from git commits (their Z2 is the commits, not a key lookup). */
   fromGit?: boolean;
   /** History entries: the key (e.g. a build number) this entry is for. */

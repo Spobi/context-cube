@@ -4,8 +4,9 @@ import { cubePaths, findProjectRoot, TOOL_COMMAND } from "../core/paths";
 import { installTool, writeSearchIgnore } from "../core/tool";
 import { defaultConfig, getSetting, loadConfig, parseSettingValue, saveConfig, setSetting, SETTING_KEYS, type CubeConfig } from "../core/config";
 import { allBoxes, getBox, getRow, loadCube } from "../core/cube";
-import { addLink, createBox, createRow, CubeError, deleteBox, ensureNl, moveBox, removeLink, renameBox, renameRow } from "../core/ops";
-import { reindex } from "../core/index/index";
+import { addLink, bulkUpdateHeaders, createBox, createRow, CubeError, deleteBox, ensureNl, moveBox, removeLink, renameBox, renameRow } from "../core/ops";
+import { alwaysLoadedBlock, reindex } from "../core/index/index";
+import { estimateTokens, fmtInt } from "../core/tokens";
 import { renderIssues, runChecks } from "../core/check/check";
 import { historyRoot, invariantsRoot, rulesRoot } from "../core/templates";
 import { LINK_RELS, ROW_TYPES, type LinkRel, type RowType, type Writer } from "../core/format/drawers";
@@ -155,11 +156,26 @@ export async function newBox(rowRef: string, name: string, opts: NewBoxOptions, 
     if (opts.index !== false) await reindex(root);
     return [`Created ${res.proposal.box} ${res.proposal.name}${res.applied ? "" : ` (pending until a person approves it: ${TOOL_COMMAND} approve ${res.proposal.id})`}`];
   }
+  const body = readBody(opts.body, stdin);
+  if (row.type === "rules") {
+    // The rules load at the start of every session, so their ceiling is a hard stop: a person raises it.
+    const config = loadConfig(root);
+    const cpt = config.tokens.charsPerToken;
+    const now = estimateTokens(alwaysLoadedBlock(cube, config).length, cpt);
+    const adding = estimateTokens((body || opts.summary || name).length + 20, cpt);
+    if (now + adding > config.limits.blockTokens) {
+      throw new CubeError(
+        `A new rule would make the block that loads at the start of every session ~${fmtInt(now + adding)} tokens, over its ceiling of ~${fmtInt(config.limits.blockTokens)}. ` +
+          `If it's about one area, put it in that area's row instead (${TOOL_COMMAND} new-box <row> ...). If it's only about certain files, add it and scope it right away (${TOOL_COMMAND} edit <id> --paths "<globs>"), after making room. ` +
+          `A person can raise the ceiling: ${TOOL_COMMAND} config set limits.blockTokens <tokens>.`,
+      );
+    }
+  }
   const box = createBox(root, row.num, {
     name,
     summary: opts.summary,
     readWhen: opts.readWhen,
-    body: readBody(opts.body, stdin),
+    body,
     drawers: {
       1: nl(readBody(opts.z1, stdin)),
       2: nl(readBody(opts.z2, stdin)),
@@ -195,19 +211,20 @@ export async function unlink(from: string, to: string, opts: { rel?: string; cwd
   return [n ? `Removed ${n} link${n === 1 ? "" : "s"} from ${from} to ${to}.` : `${from} had no link to ${to}.`];
 }
 
-export async function move(id: string, toRow: string, opts: { cwd?: string }): Promise<string[]> {
+export async function move(id: string, toRow: string, opts: { readWhen?: string; cwd?: string }): Promise<string[]> {
   const root = rootFor(opts.cwd);
   requireCube(root);
-  const r = moveBox(root, id, toRow);
-  await reindex(root);
-  const cube = loadCube(root);
-  const moved = getBox(cube, r.to);
-  const out = [`Moved ${r.from} → ${r.to}. Links were rewritten, and "${r.from}" now resolves to ${r.to}.`];
-  // A rule's read-when is "Always."; in any other row that would send agents to it on every task.
-  if (moved && getRow(cube, moved.rowNum)?.type !== "rules" && /^always\.?$/i.test(moved.header?.read_when?.trim() ?? "")) {
-    out.push(`Its read-when line is still "Always.", from the rules row. Say when a task needs it: ${TOOL_COMMAND} edit ${r.to} --read-when "Before changing <what>, or when <situation>."`);
+  const before = loadCube(root);
+  const box = getBox(before, id);
+  const dest = getRow(before, toRow.split(".")[0]);
+  // A rule's read-when is "Always."; in any other row that would send agents to the box on every task.
+  if (box && dest && dest.type !== "rules" && !opts.readWhen?.trim() && /^always\.?$/i.test(box.header?.read_when?.trim() ?? "")) {
+    throw new CubeError(`${box.id}'s read-when line is "Always.", which in ${dest.id} would send agents to it on every task. Say when a task needs it: ${TOOL_COMMAND} move ${box.id} ${toRow} --read-when "Before changing <what>, or when <situation>."`);
   }
-  return out;
+  const r = moveBox(root, id, toRow);
+  if (opts.readWhen?.trim()) bulkUpdateHeaders(root, new Map([[r.to, { readWhen: opts.readWhen.trim() }]]));
+  await reindex(root);
+  return [`Moved ${r.from} → ${r.to}. Links were rewritten, and "${r.from}" now resolves to ${r.to}.${opts.readWhen?.trim() ? " Its read-when line is updated." : ""}`];
 }
 
 export async function rename(id: string, newName: string, opts: { cwd?: string }): Promise<string[]> {

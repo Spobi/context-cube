@@ -109,6 +109,7 @@ export function buildProgram(): Command {
   program
     .command("move <box> <row>")
     .description("Move a box to a row (or renumber it in its own row). Links are rewritten and an alias recorded.")
+    .option("--read-when <text>", "a new read-when line (needed when a rule, read \"Always.\", leaves the rules row)")
     .action(run((box, row, opts) => core.move(box, row, opts)));
 
   program

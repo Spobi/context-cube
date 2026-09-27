@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { runChecks } from "../../src/core/check/check";
+import { runChecks, unsupportedNumbers } from "../../src/core/check/check";
 import { addAliases, loadAliases, resolveAlias, retire } from "../../src/core/state/state";
-import { moveBox } from "../../src/core/ops";
-import { move } from "../../src/commands/core";
+import { createBox, moveBox } from "../../src/core/ops";
+import { getBox, loadCube } from "../../src/core/cube";
+import { move, newBox } from "../../src/commands/core";
+import { loadConfig, saveConfig } from "../../src/core/config";
 import { reindex } from "../../src/core/index/index";
 import { smallCube } from "../fixtures/build";
 import { commitAll } from "../helpers";
@@ -36,12 +38,40 @@ describe("cube check", () => {
     expect(await codes(root)).not.toContain("broken-alias");
   });
 
-  it("points out a rule's \"Always.\" read-when on a box moved out of the rules row", async () => {
+  it("asks for a new read-when when a rule, read \"Always.\", leaves the rules row", async () => {
     const root = await smallCube();
-    const out = await move("Y00.X001", "Y03", { cwd: root });
-    expect(out.join("\n")).toContain('Its read-when line is still "Always.", from the rules row. Say when a task needs it: node context-cube/.tool/cube.mjs edit Y03.X002 --read-when');
-    const issue = (await runChecks(root)).find((i) => i.code === "vague-read-when" && i.message.startsWith("Y03.X002"));
+    await expect(move("Y00.X001", "Y03", { cwd: root })).rejects.toThrow(/Y00\.X001's read-when line is "Always\.", which in Y03 would send agents to it on every task\. Say when a task needs it: node context-cube\/\.tool\/cube\.mjs move Y00\.X001 Y03 --read-when/);
+    const out = await move("Y00.X001", "Y03", { readWhen: "Before changing timer code.", cwd: root });
+    expect(out[0]).toContain("Its read-when line is updated.");
+    expect(getBox(loadCube(root), "Y03.X002")!.header!.read_when).toBe("Before changing timer code.");
+    // One moved some other way is still caught by check.
+    const rule = createBox(root, 0, { name: "release-steps", summary: "Release steps.", readWhen: "Always.", body: "- Tag the build.\n" });
+    const to = moveBox(root, rule.id, "Y03").to;
+    const issue = (await runChecks(root)).find((i) => i.code === "vague-read-when" && i.message.startsWith(to));
     expect(issue?.message).toContain('read-when is "Always.", which sends an agent to it on every task');
+  });
+
+  it("won't add a rule that would put the always-loaded block over its ceiling", async () => {
+    const root = await smallCube();
+    const config = loadConfig(root);
+    config.limits.blockTokens = 400;
+    saveConfig(root, config);
+    await expect(newBox("Y00", "long-procedure", { summary: "Release steps.", readWhen: "Always.", body: `${"Run every release step in order. ".repeat(40)}\n`, cwd: root })).rejects.toThrow(/over its ceiling of ~400\. If it's about one area, put it in that area's row instead.*A person can raise the ceiling: node context-cube\/\.tool\/cube\.mjs config set limits\.blockTokens/);
+    expect((await newBox("Y03", "long-procedure", { summary: "Release steps.", readWhen: "When releasing.", body: "Steps.\n", cwd: root }))[0]).toMatch(/^Created Y03\.X002/);
+  });
+
+  it("flags numbers an AI-written summary gives that its text doesn't", async () => {
+    expect(unsupportedNumbers("Raised the cap to 2.5 Mbps (H.264 only) at 720p; ~20s ramp.", "The cap is now 2.5 Mbps. H.264 only. 720p. A 20.7 s ramp.")).toEqual([]);
+    expect(unsupportedNumbers("Migration 20260727181500 adds the busy reason; 3 steps.", "migration `20260727143000` adds the busy reason in three steps")).toEqual(["20260727181500"]);
+    expect(unsupportedNumbers("Shipped in 1.0.8.", "Shipped in 1.0.8 (10).")).toEqual([]);
+    expect(unsupportedNumbers("About 0.8 of calls.", "Version 1.0.8 shipped.")).toEqual(["0.8"]);
+    expect(unsupportedNumbers("Costs 1,500 coins.", "It costs 1500 coins.")).toEqual([]);
+    const root = await smallCube();
+    edit(C(root, "Y03-sync/X001-clock-handshake/Z0-overview.md"), (s) => s.replace("summary: The start-of-call handshake that fixes the shared end time.", "summary: The handshake runs within 250 ms."));
+    writeFileSync(C(root, "Y03-sync/X001-clock-handshake/Z4-detail.md"), "The handshake runs within 200 ms of the call starting.\n");
+    await reindex(root);
+    const issue = (await runChecks(root)).find((i) => i.code === "summary-numbers");
+    expect(issue).toMatchObject({ id: "Y03.X001", message: expect.stringContaining('Y03.X001\'s summary gives "250", which isn\'t in its text.') });
   });
 
   it("catches an invalid header", async () => {
