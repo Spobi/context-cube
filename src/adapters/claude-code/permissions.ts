@@ -12,6 +12,16 @@ import { addPermissions, loadSettings, removePermissions, saveOrRemove, saveRest
  */
 export function installPermissions(root: string, rules: PermissionRule[]): void {
   const scope = loadConfig(root).hooks.scope;
+  // Moving between personal and shared settings: take ours out of the other file first.
+  const other = scope === "local" ? "shared" : "local";
+  const theirs = loadManifest(root, ADAPTER_ID, other);
+  if (theirs?.settings?.permissions) {
+    const otherFile = loadSettings(settingsPath(root, other));
+    removePermissions(otherFile.data, theirs.settings.permissions);
+    theirs.settings.permissions = undefined;
+    saveOrRemove(otherFile, !!theirs.settings.created && !theirs.features.length);
+    saveManifest(root, theirs);
+  }
   const path = settingsPath(root, scope);
   const manifest = loadManifest(root, ADAPTER_ID, scope) ?? emptyManifest(ADAPTER_ID, scope);
   const file = loadSettings(path);

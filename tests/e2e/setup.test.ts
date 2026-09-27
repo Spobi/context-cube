@@ -109,6 +109,18 @@ describe("npx context-cube on each fixture", () => {
     expect(out.join("\n")).toMatch(/^Updated: \d+ rows/);
   });
 
+  it("running it again on a cube with personal hooks offers to share them with the team", async () => {
+    const root = tempProject(fx.houserulesDecisions);
+    commitAll(root, "init");
+    await setup({ cwd: root, yes: true, shared: false, ask: scriptedAsker({}, []), backend: recordedBackend() });
+    expect(JSON.stringify(JSON.parse(readFileSync(join(root, ".claude/settings.local.json"), "utf8")).hooks)).toContain("--features guard");
+    const log: string[] = [];
+    await setup({ cwd: root, yes: true, ask: scriptedAsker({}, log), backend: recordedBackend() });
+    expect(questions(log)).toContain("Move the cube's hooks from your personal settings to the shared project settings (.claude/settings.json), so teammates who pull get them too?");
+    expect(JSON.stringify(JSON.parse(readFileSync(join(root, ".claude/settings.json"), "utf8")).hooks)).toContain("--features guard");
+    expect(JSON.stringify(JSON.parse(readFileSync(join(root, ".claude/settings.local.json"), "utf8")).hooks ?? {})).not.toContain("--features guard");
+  });
+
   it("running it again after a usage limit finishes the build, instead of updating a half-built cube", async () => {
     const root = tempProject(scripted.files);
     commitAll(root, "init");

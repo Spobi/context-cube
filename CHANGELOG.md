@@ -2,6 +2,11 @@
 
 To update a project, run `npx context-cube@latest` in it, then commit `context-cube/` so teammates get the same version.
 
+## 0.2.6 (2026-09-26)
+
+- **A teammate who pulls gets a working cube.** The cube's hooks now go in the shared, committed `.claude/settings.json` by default (`--personal` keeps them in your own settings; the read logger stays personal), and the first session in any clone registers the merge drivers and git hooks it needs, so merges renumber duplicate boxes and rebuild generated files there too. A hooks folder the project tracks (husky and the like) is left alone. Running setup again on a cube whose hooks are personal offers to share them, and moves them rather than running them twice.
+- Setup's `--shared` (and now `--personal`) reach a build from existing files; before, only a fresh cube used them.
+
 ## 0.2.5 (2026-09-26)
 
 - **The guard lets read-only commands through.** It treated any `>` in a command that named a protected file as a write, so `2>/dev/null`, `2>&1`, or output sent to `/tmp` blocked a plain read, and so did any `python3`. Now a redirect counts only when it points at a protected file, `cp` only when it copies into one, and a script only when it looks like it writes.

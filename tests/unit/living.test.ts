@@ -15,6 +15,7 @@ import { installAgents, uninstallAgents } from "../../src/core/install";
 import { linkCode } from "../../src/core/code/links";
 import { readJsonl } from "../../src/core/fsutil";
 import { commitAll, snapshot, tempProject } from "../helpers";
+import { logInstall } from "../../src/commands/log";
 
 async function cubeProject(files: Record<string, string> = {}) {
   const root = tempProject({ "src/clock.ts": "export function endTime() { return 60; }\n", "CLAUDE.md": "# Notes\n", ...files });
@@ -165,7 +166,7 @@ describe("the guard hook", () => {
     const restore = await pre(root, "Bash", { command: "node context-cube/.tool/cube.mjs restore HISTORY.md" });
     expect(JSON.parse(restore.stdout!).hookSpecificOutput.permissionDecision).toBe("ask");
     await installAgents(root);
-    const settings = JSON.parse(readFileSync(join(root, ".claude/settings.local.json"), "utf8"));
+    const settings = JSON.parse(readFileSync(join(root, ".claude/settings.json"), "utf8"));
     expect(settings.permissions.deny).toContain("Read(/context-cube/.state/archive/**)");
     expect(settings.permissions.ask).toContain("Bash(node context-cube/.tool/cube.mjs restore:*)");
   });
@@ -284,8 +285,10 @@ describe("install, the pre-commit check, and uninstall", () => {
     const inv = createBox(root, 2, { name: "rule", summary: "A rule.", readWhen: "Always.", drawers: { 1: "- Never do X.\n" } });
     approveText(root, inv.id, "- Never do X.\n");
     await installAgents(root);
-    const settings = JSON.parse(readFileSync(join(root, ".claude/settings.local.json"), "utf8"));
+    // Shared by default: the committed project settings, so teammates get them.
+    const settings = JSON.parse(readFileSync(join(root, ".claude/settings.json"), "utf8"));
     expect(settings.permissions.ask).toContain("Bash(node context-cube/.tool/cube.mjs config set:*)");
+    expect(JSON.stringify(settings.hooks)).toContain("$CLAUDE_PROJECT_DIR"); // works in every teammate's clone
     expect(Object.keys(settings.hooks).sort()).toEqual(["PostToolUse", "PreToolUse", "SessionStart", "Stop"]);
     expect(existsSync(join(root, ".claude/agents/cube-updater.md"))).toBe(true);
     expect(readFileSync(join(root, ".claude/agents/cube-updater.md"), "utf8")).toContain("model: haiku");
@@ -306,5 +309,51 @@ describe("install, the pre-commit check, and uninstall", () => {
     await uninstallAgents(root);
     expect(outside()).toEqual(before);
     expect(readdirSync(join(root, ".git/hooks")).sort()).toEqual(hooksBefore);
+  });
+});
+
+describe("teams", () => {
+  const session = (root: string) => handleHook("session-start", { session_id: "s", cwd: root, source: "startup" }, root, new Set(["session"]));
+
+  it("moves the cube's hooks and permissions to the shared settings, leaving a personal logger where it is", async () => {
+    const root = await cubeProject();
+    await installAgents(root, undefined, { shared: false });
+    logInstall({ cwd: root });
+    const local = () => JSON.parse(readFileSync(join(root, ".claude/settings.local.json"), "utf8"));
+    expect(JSON.stringify(local().hooks)).toContain("guard");
+    await installAgents(root, undefined, { shared: true });
+    const shared = JSON.parse(readFileSync(join(root, ".claude/settings.json"), "utf8"));
+    for (const f of ["guard", "session", "update"]) expect(JSON.stringify(shared.hooks)).toContain(`--features ${f}`);
+    expect(shared.permissions.deny).toContain("Read(/context-cube/.state/archive/**)");
+    // Personal settings keep only the logger: no hook runs twice.
+    expect(JSON.stringify(local().hooks)).not.toMatch(/--features (guard|session|update)/);
+    expect(JSON.stringify(local().hooks)).toContain("--features log");
+    expect(Object.values(local().hooks).every((groups) => (groups as unknown[]).length > 0)).toBe(true);
+    expect(local().permissions?.deny ?? []).not.toContain("Read(/context-cube/.state/archive/**)");
+  });
+
+  it("sets up a teammate's clone at its first session: merge drivers and git hooks", async () => {
+    const root = await cubeProject();
+    await installAgents(root);
+    commitAll(root, "cube");
+    const clone = tempProject({}, { git: false });
+    spawnSync("git", ["clone", "-q", root, clone]);
+    const gitConfig = (key: string) => spawnSync("git", ["config", "--get", key], { cwd: clone, encoding: "utf8" }).stdout.trim();
+    expect(gitConfig("merge.cube-generated.driver")).toBe("");
+    const first = await session(clone);
+    expect(first.stdout).toContain("Context Cube set up this clone: merge drivers, the pre-commit check for invariant text, renumbering after merges.");
+    expect(gitConfig("merge.cube-generated.driver")).toContain("merge-file generated");
+    expect(readFileSync(join(clone, ".git/hooks/pre-commit"), "utf8")).toContain("check --invariants");
+    // Only once.
+    expect((await session(clone)).stdout ?? "").not.toContain("set up this clone");
+  });
+
+  it("leaves a hooks folder the project tracks alone, but still registers the merge drivers", async () => {
+    const root = await cubeProject({ ".husky/pre-commit": "#!/bin/sh\nnpm test\n" });
+    spawnSync("git", ["config", "core.hooksPath", ".husky"], { cwd: root });
+    commitAll(root, "husky");
+    const out = await session(root);
+    expect(out.stdout).toContain("Context Cube set up this clone: merge drivers.");
+    expect(readFileSync(join(root, ".husky/pre-commit"), "utf8")).toBe("#!/bin/sh\nnpm test\n");
   });
 });

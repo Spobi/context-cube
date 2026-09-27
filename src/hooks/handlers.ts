@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { registerHookHandler, type HookOutcome } from "../commands/hook";
 import { sessionNotice } from "../core/code/notice";
+import { setUpClone } from "../core/install";
 import { relToRoot, TOOL_COMMAND, CUBE_DIR } from "../core/paths";
 import { loadConfig } from "../core/config";
 import { getBox, getRow, loadCube } from "../core/cube";
@@ -19,7 +20,14 @@ import { isCommitCommand, lastCommit, loadMarks, onlyCubeFiles, saveMarks, updat
 registerHookHandler(async (event, input, root, features) => {
   if (event !== "session-start" || !features.has("session")) return;
   if (input.source === "compact") return;
-  const notice = sessionNotice(root);
+  // A clone that only pulled the cube (a teammate's) gets set up for its merges and commits.
+  let setUp: string[] = [];
+  try {
+    setUp = setUpClone(root);
+  } catch {
+    // Setting up git must never stop a session.
+  }
+  const notice = [setUp.length ? `Context Cube set up this clone: ${setUp.join(", ")}.` : "", sessionNotice(root) ?? ""].filter(Boolean).join("\n");
   return notice ? { exitCode: 0, stdout: notice } : undefined;
 });
 

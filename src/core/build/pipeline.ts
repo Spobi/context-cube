@@ -56,6 +56,8 @@ export interface BuildContext {
   onlySources?: string[];
   /** Extra sources to include even if classified as "other". */
   addSources?: string[];
+  /** Where the hooks go: shared project settings, or personal (undefined: the cube's setting). */
+  shared?: boolean;
   /** Set when the person picks a later start for the unattended stages. */
   schedule?: Schedule;
   clock?: Clock;

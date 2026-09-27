@@ -120,6 +120,8 @@ To turn approvals off, ask your agent to; it runs `cube config set invariants.ap
 
 ## Teams
 
+A teammate who pulls the project gets the cube working without running setup. The cube's hooks go in the shared, committed `.claude/settings.json` (run setup with `--personal` to keep them in your own `.claude/settings.local.json` instead; the read logger always stays personal). At the first session in a clone, the session hook registers what git can't carry in a commit: the merge drivers, the pre-commit check for invariant text, and renumbering after merges. A hooks folder the project tracks itself (husky, say) is left alone. Running setup again on a cube whose hooks are personal offers to share them.
+
 Commit `context-cube/` like any other folder (its `.logs/` stays on each person's machine); `cube check` warns while it isn't committed, since until then the cube and any originals archived in it exist only on one machine. Merges are handled for you: generated files never block a merge, history additions go in separate files so two people never edit the same one, each box's bookkeeping merges field by field (so an approval on one branch survives another branch's later changes to the same box), and if two branches both create box `Y05.X016`, the newer one is renumbered after the merge and every link to it is rewritten. `context-cube/.tool/cube.mjs` is the program your hooks run, so review a change to it like any code change; it should only change when someone updates Context Cube. GitHub isn't required; a local git repo works, and without git the cube still works as plain files.
 
 ## Other agents

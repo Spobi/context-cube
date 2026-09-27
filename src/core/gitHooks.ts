@@ -74,6 +74,20 @@ function removeHookBlock(root: string, name: string): void {
   }
 }
 
+/** Whether this clone's hook `name` has the cube's block. */
+export function hasHookBlock(root: string, name: string): boolean {
+  const dir = hooksDir(root);
+  return !!dir && readTextOr(join(dir, name), "").includes(START);
+}
+
+/** Whether the hooks folder is the project's own, tracked in git (husky and the like): changing it changes the project. */
+export function hooksFolderTracked(root: string): boolean {
+  const dir = hooksDir(root);
+  if (!dir) return false;
+  const r = git(["ls-files", "--", dir], root);
+  return r.ok && !!r.stdout.trim();
+}
+
 /** Git hooks for teams: renumber duplicates and rebuild generated files after merges and rebases (plan 11). */
 export function installMergeHooks(root: string): void {
   installHookBlock(root, "post-merge", AFTER_MERGE);

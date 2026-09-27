@@ -21,6 +21,8 @@ export interface BuildOptions {
   preset?: string;
   /** Start the part after the row review at this time, like "23:30" or "11:30pm". */
   at?: string;
+  /** Where the hooks go (see setup's --shared and --personal). */
+  shared?: boolean;
   ask?: Asker;
   backend?: AIBackend;
   /** For tests: a clock that doesn't really wait. */
@@ -52,6 +54,7 @@ export async function build(opts: BuildOptions = {}): Promise<string[]> {
     addSources: opts.add,
     schedule,
     clock,
+    shared: opts.shared,
   };
   try {
     for (;;) {

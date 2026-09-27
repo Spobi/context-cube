@@ -759,7 +759,7 @@ async function install(ctx: BuildContext, state: BuildState) {
 /** Install work after indexing: hooks (and, from later phases, permissions and the updater). */
 export const installHooks: ((ctx: BuildContext, s: BuildState) => Promise<void>)[] = [
   async (ctx) => {
-    for (const line of await installAgents(ctx.root)) ctx.ask.say(line);
+    for (const line of await installAgents(ctx.root, undefined, { shared: ctx.shared })) ctx.ask.say(line);
   },
 ];
 

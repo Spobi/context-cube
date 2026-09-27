@@ -128,7 +128,11 @@ export function uninstallHooks(root: string, plan: HookPlan): { remaining: strin
   const file = loadSettings(path);
   const containers = manifest?.settings ? { hooksKey: manifest.settings.hooksKey, events: manifest.settings.events } : undefined;
   removeHooks(file.data, isOurHookCommand, remaining.length ? { hooksKey: false, events: [] } : containers);
-  if (remaining.length) addHooks(file.data, hookEntries(root, plan.scope, remaining));
+  if (remaining.length) {
+    addHooks(file.data, hookEntries(root, plan.scope, remaining));
+    // Events this tool added that no remaining feature uses: don't leave them empty.
+    for (const e of manifest?.settings?.events ?? []) if (Array.isArray(file.data.hooks?.[e]) && !file.data.hooks[e].length) delete file.data.hooks[e];
+  }
   const created = manifest?.settings?.created ?? false;
   const permsLeft = manifest?.settings?.permissions?.rules.length ?? 0;
   if (!remaining.length && !permsLeft && !created) saveRestoring(file, manifest?.settings?.originalText);

@@ -122,7 +122,7 @@ export async function setup(opts: SetupOptions = {}): Promise<string[]> {
   }
   if (situation === "existing" && pf.claude?.installed) {
     say(ask, pf.buildInProgress ? "Continuing the build that was in progress.\n" : `Found ${candidates.length} file${candidates.length === 1 ? "" : "s"} that could hold project memory. Building the cube from them.\n`);
-    const buildOut = await build({ cwd: root, ask, backend: opts.backend, preset: opts.preset, at: opts.at });
+    const buildOut = await build({ cwd: root, ask, backend: opts.backend, preset: opts.preset, at: opts.at, shared: opts.shared });
     const state = loadState(root);
     if (!state.done.includes("install")) return buildOut; // paused or stopped; it said why
     await handleOriginals(root, ask, mayEditOriginals);
@@ -200,10 +200,15 @@ async function updateExisting(root: string, ask: Asker, opts: SetupOptions): Pro
   const upgrade = theirs && compareVersions(version(), theirs) > 0 ? ` and update the project's copy of Context Cube from ${theirs} to ${version()}` : "";
   const ok = await ask.confirm(`Update it (check which boxes are stale, refresh code links and indexes, and reinstall the hooks${upgrade}) instead of rebuilding?`, true);
   if (!ok) return [`Nothing changed. To rebuild from scratch: take the cube out of your agent and put your original files back (${TOOL_COMMAND} uninstall, then ${TOOL_COMMAND} restore --all), then move context-cube/ out of the way and run this again.`];
+  // Hooks in personal settings reach only this machine; offer to share them, so a teammate who pulls gets them.
+  let shared = opts.shared;
+  if (shared === undefined && loadConfig(root).hooks.scope === "local" && gitRoot(root)) {
+    shared = await ask.confirm("Move the cube's hooks from your personal settings to the shared project settings (.claude/settings.json), so teammates who pull get them too?", true);
+  }
   const tool = installTool(root);
   linkCodeForStale(root);
   const marked = applyStatus(root, computeStatus(root));
-  await installAgents(root, undefined, { shared: opts.shared });
+  await installAgents(root, undefined, { shared });
   const cube = loadCube(root);
   return [
     ...(tool.updatedFrom ? [`Updated the project's copy of Context Cube from ${tool.updatedFrom} to ${version()}. Commit context-cube/ so teammates get it too.`] : []),
@@ -251,7 +256,7 @@ function finish(root: string): string[] {
     "  • Invariant changes need a person's approval by default. You can change this anytime by asking your AI to turn off invariant approvals (it will ask you to confirm).",
     logger ? "  • What the agent reads is logged on this machine; see it with: node context-cube/.tool/cube.mjs stats" : "",
     gitRoot(root)
-      ? `  • Commit context-cube/ now${archived.length ? ", with CLAUDE.md and the placeholders," : ""} like any other folder: until you do, the cube${archived.length ? " and the archived originals" : ""} exist only on this machine, and your team doesn't share the memory.`
+      ? `  • Commit context-cube/ now${archived.length || config.hooks.scope === "shared" ? `, with ${[archived.length ? "CLAUDE.md and the placeholders" : "", config.hooks.scope === "shared" ? ".claude/ (the hooks teammates get)" : ""].filter(Boolean).join(" and ")},` : ""} like any other folder: until you do, the cube${archived.length ? " and the archived originals" : ""} exist only on this machine, and your team doesn't share the memory.`
       : "  • Keep context-cube/ with the project (and in version control if you add it), so the memory travels with the code.",
   );
   return out.filter((l) => l !== "");

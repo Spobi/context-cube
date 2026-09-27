@@ -53,9 +53,10 @@ export function buildProgram(): Command {
       .option("-y, --yes", "accept every default without asking (including the offer to rewrite rules that point at your original files)")
       .option("--preset <preset>", "economy, balanced (default), or max: how capable a model each AI step uses")
       .option("--at <time>", "start the big part of the build (after you review the rows) at this time, like 23:30 or 11:30pm, say after your plan's usage resets; the terminal waits until then")
-      .option("--shared", "put the cube's hooks in the shared, committed .claude/settings.json (default: your personal settings)")
+      .option("--shared", "put the cube's hooks in the shared, committed .claude/settings.json (the default for a new cube)")
+      .option("--personal", "put the cube's hooks in your personal .claude/settings.local.json instead, so teammates don't get them")
       .option("--without-logger", "don't log what the agent reads");
-  const runSetup = run((opts) => setup({ ...opts, logger: opts.withoutLogger ? false : undefined }));
+  const runSetup = run((opts) => setup({ ...opts, shared: opts.personal ? false : opts.shared ? true : undefined, logger: opts.withoutLogger ? false : undefined }));
   setupOpts(program.command("setup").description("Guided setup: build a cube from what exists, or start a fresh one. The same as running with no command.")).action(runSetup);
   setupOpts(program).action(runSetup);
 

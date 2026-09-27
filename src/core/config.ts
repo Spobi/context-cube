@@ -38,7 +38,8 @@ export const ConfigSchema = z.object({
     .default({ z0Words: 80, rootDrawerTokens: 1500, blockTokens: 3000, links: 8 }),
   ai: z.object({ parallel: z.number().int().positive().default(4) }).default({ parallel: 4 }),
   /** Where the cube's hooks go: personal settings (local) or the committed project settings (shared). */
-  hooks: z.object({ scope: z.enum(["local", "shared"]).default("local") }).default({ scope: "local" }),
+  // Shared by default, so a teammate who pulls gets the hooks too (the read logger stays personal).
+  hooks: z.object({ scope: z.enum(["local", "shared"]).default("shared") }).default({ scope: "shared" }),
 });
 
 export type CubeConfig = z.infer<typeof ConfigSchema>;
