@@ -5,7 +5,7 @@ import { ConfigSchema, loadConfig, type CubeConfig } from "../config";
 import { splitGenerated } from "../format/generated";
 import { findInlineRefs } from "../format/links";
 import { idKey, parseId } from "../format/ids";
-import { loadAliases, loadRetired } from "../state/state";
+import { loadAliases, loadRetired, resolveAlias } from "../state/state";
 import { editedGenerated } from "../index/backlinks";
 import { cubeMd, rowPages, sourceFile } from "../index/pages";
 import { isAgentFile } from "../logs/memoryFiles";
@@ -124,7 +124,10 @@ export function structureChecks({ root, cube, config }: CheckContext): Issue[] {
       warn("name-mismatch", `${box.id}: header name "${h.name}" differs from the folder name "${box.isRoot ? row.name : box.name}".`, box.id, "Use `cube rename` so both stay in sync.");
     }
     if (!h.read_when?.trim()) err("missing-read-when", `${box.id} has no read_when line.`, box.id, "Every Z0 needs a read_when line saying when to open the box.");
-    else if (row.type !== "rules") {
+    else if (row.type !== "rules" && /^always\.?$/i.test(h.read_when.trim())) {
+      // A rule's "Always." left on a box that moved out of the rules row: it would send agents there on every task.
+      warn("vague-read-when", `${box.id} read-when is "Always.", which sends an agent to it on every task. Outside the rules row, it should name the changes, files, or symptoms that need it.`, box.id, `${TOOL_COMMAND} edit ${box.id} --read-when "Before changing <what>, or when debugging <symptom>."`);
+    } else if (row.type !== "rules") {
       const vague = vagueReadWhen(h.read_when);
       if (vague) warn("vague-read-when", `${box.id} read-when is vague ("${vague}"). It decides whether an agent opens the box, so it should name the changes, files, or symptoms that need it.`, box.id, `${TOOL_COMMAND} edit ${box.id} --read-when "Before changing <what>, or when debugging <symptom>."`);
     }
@@ -178,10 +181,13 @@ export function structureChecks({ root, cube, config }: CheckContext): Issue[] {
     err("generated-edited", `${e.id}: the generated section (between the cube:generated markers) was edited.`, e.id, "Put your text above the markers; `cube index` rewrites the generated part.");
   }
 
-  for (const a of loadAliases(root)) {
-    const c = parseId(a.target);
-    const ok = c && (c.box === undefined ? !!getRow(cube, c.row) : !!getBox(cube, a.target));
-    if (!ok) warn("broken-alias", `Alias "${a.alias}" points to ${a.target}, which doesn't exist.`);
+  // An alias can point at an old id that another alias carries on from (a box that moved): follow the chain.
+  const aliases = loadAliases(root);
+  for (const a of aliases) {
+    const target = resolveAlias(aliases, a.alias) ?? a.target;
+    const c = parseId(target);
+    const ok = c && (c.box === undefined ? !!getRow(cube, c.row) : !!getBox(cube, target));
+    if (!ok) warn("broken-alias", `Alias "${a.alias}" points to ${target}, which doesn't exist.`);
   }
 
   for (const u of unapprovedChanges(root)) {

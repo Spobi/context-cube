@@ -2,6 +2,11 @@
 
 To update a project, run `npx context-cube@latest` in it, then commit `context-cube/` so teammates get the same version.
 
+## 0.2.4 (2026-09-26)
+
+- **`cube check` no longer calls an old alias broken when its box moved.** An alias like "4.1" pointing at a box that `cube move` renumbered still resolved (aliases chain), but the check looked only one step and warned.
+- **Moving a rule out of the rules row points out its "Always." read-when line,** which in any other row would send agents to the box on every task; `cube check` warns about it too.
+
 ## 0.2.3 (2026-09-26)
 
 - **A build catches up with files you edited while it was paused or waiting.** Before, adding a section to a file between a usage-limit pause and the rerun (or during the day, before a build set for the night) made the final coverage check fail, and setup stopped. Now new entries are brought in as boxes, like the rest, and everything after them in the file moves down to match, so the file still recombines exactly and is archived. A new entry that lands between the blank lines closing an entry is handled too. Other changes (text edited or removed, or lines added inside an entry) are reported: the cube keeps that file as the build read it, and the file stays in place, not archived.

@@ -200,7 +200,14 @@ export async function move(id: string, toRow: string, opts: { cwd?: string }): P
   requireCube(root);
   const r = moveBox(root, id, toRow);
   await reindex(root);
-  return [`Moved ${r.from} → ${r.to}. Links were rewritten, and "${r.from}" now resolves to ${r.to}.`];
+  const cube = loadCube(root);
+  const moved = getBox(cube, r.to);
+  const out = [`Moved ${r.from} → ${r.to}. Links were rewritten, and "${r.from}" now resolves to ${r.to}.`];
+  // A rule's read-when is "Always."; in any other row that would send agents to it on every task.
+  if (moved && getRow(cube, moved.rowNum)?.type !== "rules" && /^always\.?$/i.test(moved.header?.read_when?.trim() ?? "")) {
+    out.push(`Its read-when line is still "Always.", from the rules row. Say when a task needs it: ${TOOL_COMMAND} edit ${r.to} --read-when "Before changing <what>, or when <situation>."`);
+  }
+  return out;
 }
 
 export async function rename(id: string, newName: string, opts: { cwd?: string }): Promise<string[]> {

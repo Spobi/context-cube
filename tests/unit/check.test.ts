@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { runChecks } from "../../src/core/check/check";
-import { retire } from "../../src/core/state/state";
+import { addAliases, loadAliases, resolveAlias, retire } from "../../src/core/state/state";
+import { moveBox } from "../../src/core/ops";
+import { move } from "../../src/commands/core";
 import { reindex } from "../../src/core/index/index";
 import { smallCube } from "../fixtures/build";
 import { commitAll } from "../helpers";
@@ -24,6 +26,22 @@ describe("cube check", () => {
     expect((await runChecks(root)).map((i) => i.code)).toEqual(["cube-not-committed"]);
     commitAll(root);
     expect(await runChecks(root)).toEqual([]);
+  });
+
+  it("follows an old alias through a box that moved, instead of calling it broken", async () => {
+    const root = await smallCube();
+    addAliases(root, [{ alias: "§9", target: "Y03.X001" }]);
+    moveBox(root, "Y03.X001", "Y02");
+    expect(resolveAlias(loadAliases(root), "§9")).toBe("Y02.X002");
+    expect(await codes(root)).not.toContain("broken-alias");
+  });
+
+  it("points out a rule's \"Always.\" read-when on a box moved out of the rules row", async () => {
+    const root = await smallCube();
+    const out = await move("Y00.X001", "Y03", { cwd: root });
+    expect(out.join("\n")).toContain('Its read-when line is still "Always.", from the rules row. Say when a task needs it: node context-cube/.tool/cube.mjs edit Y03.X002 --read-when');
+    const issue = (await runChecks(root)).find((i) => i.code === "vague-read-when" && i.message.startsWith("Y03.X002"));
+    expect(issue?.message).toContain('read-when is "Always.", which sends an agent to it on every task');
   });
 
   it("catches an invalid header", async () => {
