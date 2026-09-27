@@ -40,3 +40,37 @@ export function pathRulesFor(cube: Cube): PathRule[] {
   }
   return rules;
 }
+
+/**
+ * Glob matching for rule paths, relative to the project root: `**` crosses
+ * folders, `*` and `?` don't, `{a,b}` is either. For agents without path-scoped
+ * rule files (Codex), whose hooks surface the rules themselves.
+ */
+export function globToRegExp(glob: string): RegExp {
+  let re = "";
+  for (let i = 0; i < glob.length; i++) {
+    const ch = glob[i];
+    if (ch === "*" && glob[i + 1] === "*") {
+      i++;
+      if (glob[i + 1] === "/") {
+        i++;
+        re += "(?:.*/)?";
+      } else re += ".*";
+    } else if (ch === "*") re += "[^/]*";
+    else if (ch === "?") re += "[^/]";
+    else if (ch === "{") {
+      const end = glob.indexOf("}", i);
+      if (end < 0) re += "\\{";
+      else {
+        re += `(?:${glob.slice(i + 1, end).split(",").map((alt) => globToRegExp(alt).source.slice(1, -1)).join("|")})`;
+        i = end;
+      }
+    } else re += ch.replace(/[.+^$()|[\]\\]/g, "\\$&");
+  }
+  return new RegExp(`^${re}$`);
+}
+
+/** The rules that load for a file (a path relative to the project root). */
+export function rulesForFile(rules: PathRule[], rel: string): PathRule[] {
+  return rules.filter((r) => r.paths.some((p) => globToRegExp(p.replace(/^\.\//, "")).test(rel)));
+}

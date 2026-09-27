@@ -17,6 +17,9 @@ export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
     globalSetup: ["tests/globalSetup.ts"],
+    // Setup looks for Codex and the Claude desktop app, on the machine and around the running
+    // process; tests say what's there, whichever agent runs them.
+    env: { CUBE_CODEX: "0", CUBE_CLAUDE_DESKTOP: "0", CODEX_THREAD_ID: "", CODEX_SESSION_ID: "", CLAUDE_CODE_ENTRYPOINT: "" },
     testTimeout: 30000,
   },
 });

@@ -245,10 +245,34 @@ function extractBash(input: HookInput, ctx: Ctx): ReadRecord[] {
   const resp = asObj(input.tool_response);
   const stdout = str(resp?.stdout) ?? (typeof input.tool_response === "string" ? input.tool_response : "");
   if (!command || !stdout) return [];
-  const parts = splitCommand(command);
-  if (!parts) return [];
+  const plan = planBash(command, ctx.cwd);
+  if (!plan) return [];
+  const { planned, grepPipeline, cwd } = plan;
 
-  let cwd = ctx.cwd;
+  if (planned.length === 0 && grepPipeline) {
+    return attributeGrepLines(stdout, { ...ctx, cwd }, grepPipeline.searchAbs, "Bash");
+  }
+  if (planned.length === 0) return [];
+  const totalWeight = planned.reduce((s, p) => s + Math.max(1, p.weight), 0);
+  return planned.map((p) => {
+    const share = planned.length === 1 ? stdout.length : Math.round((stdout.length * Math.max(1, p.weight)) / totalWeight);
+    return rec(ctx, "Bash", p.file, share, {
+      ...(p.ranges ? { ranges: p.ranges } : {}),
+      totalLines: p.totalLines,
+    });
+  });
+}
+
+/** The files a shell command prints (cat, head, sed -n, …), as absolute paths. Searches aren't counted. */
+export function bashReadFiles(command: string, cwd: string): string[] {
+  return [...new Set(planBash(command, cwd)?.planned.map((p) => p.file) ?? [])];
+}
+
+function planBash(command: string, startCwd: string): { planned: PlannedRead[]; grepPipeline?: { searchAbs: string }; cwd: string } | undefined {
+  const parts = splitCommand(command);
+  if (!parts) return undefined;
+
+  let cwd = startCwd;
   const planned: PlannedRead[] = [];
   let grepPipeline: { searchAbs: string } | undefined;
   let i = 0;
@@ -280,19 +304,7 @@ function extractBash(input: HookInput, ctx: Ctx): ReadRecord[] {
     }
     planned.push(...narrowed);
   }
-
-  if (planned.length === 0 && grepPipeline) {
-    return attributeGrepLines(stdout, { ...ctx, cwd }, grepPipeline.searchAbs, "Bash");
-  }
-  if (planned.length === 0) return [];
-  const totalWeight = planned.reduce((s, p) => s + Math.max(1, p.weight), 0);
-  return planned.map((p) => {
-    const share = planned.length === 1 ? stdout.length : Math.round((stdout.length * Math.max(1, p.weight)) / totalWeight);
-    return rec(ctx, "Bash", p.file, share, {
-      ...(p.ranges ? { ranges: p.ranges } : {}),
-      totalLines: p.totalLines,
-    });
-  });
+  return { planned, grepPipeline, cwd };
 }
 
 /** Drops wrappers like `rtk proxy`, `command`, `sudo`; maps `rtk read` to cat. */

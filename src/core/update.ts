@@ -32,7 +32,7 @@ export function lastCommit(root: string, ref = "HEAD"): CommitInfo | undefined {
 
 /** A commit that only touched the cube or agent settings needs no cube update. */
 export function onlyCubeFiles(files: string[]): boolean {
-  return files.length > 0 && files.every((f) => f === "CLAUDE.md" || f === "AGENTS.md" || f.startsWith(`${CUBE_DIR}/`) || f.startsWith(".claude/"));
+  return files.length > 0 && files.every((f) => f === "CLAUDE.md" || f === "AGENTS.md" || f.startsWith(`${CUBE_DIR}/`) || f.startsWith(".claude/") || f.startsWith(".codex/") || f.startsWith(".agents/skills/cube-"));
 }
 
 /** A version or build number named in a commit subject, e.g. "1.0.8 (10)". */
@@ -60,7 +60,7 @@ export function linkedBoxes(root: string, files: string[]): Box[] {
   });
 }
 
-export function updatePlan(root: string, opts: { commit?: CommitInfo; files?: string[]; reason?: string } = {}): string {
+export function updatePlan(root: string, opts: { commit?: CommitInfo; files?: string[]; reason?: string; helper?: string } = {}): string {
   const cube = loadCube(root);
   const files = opts.commit?.files ?? opts.files ?? [];
   const linked = linkedBoxes(root, files);
@@ -77,7 +77,7 @@ export function updatePlan(root: string, opts: { commit?: CommitInfo; files?: st
   const lines = [
     opts.commit ? `Context Cube: update the project memory for commit ${opts.commit.hash} "${opts.commit.subject.slice(0, 100)}".` : `Context Cube: update the project memory for this session's work${opts.reason ? ` (${opts.reason})` : ""}.`,
     "1. Write a short note (2–4 sentences): what changed and why.",
-    `2. Hand the note and this plan to the cube-updater agent (a helper on a cheap model), for example with the Task tool and subagent_type "cube-updater". If you can't use it, run the steps below yourself.`,
+    `2. ${opts.helper ?? `Hand the note and this plan to the cube-updater agent (a helper on a cheap model), for example with the Task tool and subagent_type "cube-updater".`} If you can't use it, run the steps below yourself.`,
     "",
     "Plan for the helper:",
     `- Add the note to the open history entry: ${c} history add "<note>"${key ? ` --key "${key}"` : ""}${linked.length ? ` --touches ${linked.slice(0, 8).map((b) => b.id).join(",")}` : ""}`,
@@ -112,6 +112,8 @@ export interface SessionMarks {
   files?: string[];
   updateRequested?: boolean;
   handledCommits: string[];
+  /** Rules already shown this session by the guard hook (for agents without path rule files). */
+  shownRules?: string[];
 }
 
 function marksPath(root: string, session: string): string {

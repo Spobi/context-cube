@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AICall, AIResult } from "../types";
 import { LIMIT_RE, UsageLimitError } from "../../ai/runner";
+import { claudeBin } from "./bin";
 
 /**
  * One non-interactive Claude Code call (`claude -p`) at a given tier, with no
@@ -32,7 +33,7 @@ export async function runClaude(call: AICall): Promise<AIResult> {
   delete env.CLAUDE_PROJECT_DIR;
   const started = Date.now();
   try {
-    const { stdout, stderr, code } = await runProcess(process.env.CUBE_CLAUDE_BIN || "claude", args, call.prompt, cwd, env, call.timeoutMs ?? 15 * 60_000);
+    const { stdout, stderr, code } = await runProcess(claudeBin(), args, call.prompt, cwd, env, call.timeoutMs ?? 15 * 60_000);
     let d: any;
     try {
       d = JSON.parse(stdout);

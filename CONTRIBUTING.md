@@ -44,6 +44,8 @@ To find recordings no test uses any more, run the tests with `CUBE_AI_TRACK=/tmp
 
 `cube ai test` runs a trivial step live at each tier, to check the runner end to end.
 
+Setup looks for Codex and the Claude desktop app on the machine and around the running process. The tests pin what they see (`CUBE_CODEX=0`, `CUBE_CLAUDE_DESKTOP=0`, and the agents' session variables, in `vitest.config.ts`), so they pass the same on any machine and in any agent.
+
 ## Rules for fixtures
 
 Test projects in `tests/fixtures/` are synthetic. Never copy a real project's files or content into this repo.

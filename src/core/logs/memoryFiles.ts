@@ -8,6 +8,7 @@ const AGENT_FILE_NAMES = new Set([
   "claude.md",
   "claude.local.md",
   "agents.md",
+  "agents.override.md",
   "agent.md",
   "gemini.md",
   ".cursorrules",

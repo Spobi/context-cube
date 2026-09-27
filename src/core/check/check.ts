@@ -65,6 +65,7 @@ export async function runChecks(root: string): Promise<Issue[]> {
   issues.push(...recordChecks(root, cube));
   issues.push(...commitChecks(root));
   issues.push(...summaryNumberChecks(cube));
+  issues.push(...codexChecks(root, config));
   for (const c of extraChecks) {
     try {
       issues.push(...(await c.fn(ctx)));
@@ -382,4 +383,23 @@ export function renderIssues(issues: Issue[], opts: { group?: number } = {}): st
   for (const [code, n] of hidden) out.push(`       …and ${n} more [${code}] (see all with: cube check --json)`);
   out.push(`cube check: ${errors.length} error${errors.length === 1 ? "" : "s"}, ${warns.length} warning${warns.length === 1 ? "" : "s"}.`);
   return out.join("\n");
+}
+
+/** Codex reads AGENTS.md only up to project_doc_max_bytes (32 KiB unless changed), and the cube's block comes last. */
+export const CODEX_DOC_BYTES = 32 * 1024;
+
+function codexChecks(root: string, config: CubeConfig): Issue[] {
+  if (!config.agents.includes("codex")) return [];
+  const text = readTextOr(join(root, "AGENTS.md"), "");
+  const bytes = Buffer.byteLength(text, "utf8");
+  const end = text.indexOf("<!-- context-cube:end -->");
+  if (bytes <= CODEX_DOC_BYTES || end < 0 || Buffer.byteLength(text.slice(0, end), "utf8") <= CODEX_DOC_BYTES) return [];
+  return [
+    {
+      level: "warn",
+      code: "agents-md-too-long",
+      message: `AGENTS.md is ${fmtInt(Math.round(bytes / 1024))} KB. Codex reads only its first 32 KB by default, and the cube's block is at the end, so Codex doesn't see all of it.`,
+      fix: "Shorten AGENTS.md above the block (its notes could move into the cube), or raise project_doc_max_bytes in Codex's config.toml.",
+    },
+  ];
 }

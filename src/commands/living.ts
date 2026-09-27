@@ -5,7 +5,8 @@ import { reindex } from "../core/index/index";
 import { addFragment, closeEntry, listFragments, openEntry, openNew } from "../core/history";
 import { approve, listProposals, proposeDelete, proposeEdit, proposeNew, reject, renderProposal, unapprovedChanges } from "../core/approvals";
 import { lastCommit, updatePlan } from "../core/update";
-import { installAgents, uninstallAgents } from "../core/install";
+import { addAgents, installAgents, removeAgent, uninstallAgents } from "../core/install";
+import { getAdapter } from "../adapters/registry";
 import { installTool, version } from "../core/tool";
 import { appendToDrawer, drawerRecord, recordRefusal, replaceRecord } from "../core/records";
 import { readBody, parseLinkSpec } from "./core";
@@ -208,20 +209,27 @@ export async function rejectCmd(ref: string, opts: { reason?: string; cwd?: stri
 
 // ---------- updating and installing ----------
 
-export function planCmd(opts: { commit?: string; cwd?: string }): string {
+export function planCmd(opts: { commit?: string; cwd?: string; agent?: string }): string {
   const r = root(opts.cwd);
   const commit = lastCommit(r, opts.commit ?? "HEAD");
-  return updatePlan(r, commit ? { commit } : {});
+  const helper = opts.agent ? getAdapter(opts.agent).hookDialect?.updateHelper : undefined;
+  return updatePlan(r, commit ? { commit, helper } : { helper });
 }
 
-export async function install(opts: { cwd?: string; shared?: boolean }): Promise<string[]> {
+export async function install(opts: { cwd?: string; shared?: boolean; agent?: string[] }): Promise<string[]> {
   const r = root(opts.cwd);
   if (!loadCube(r).rows.length) throw new CubeError("There's no cube to install. Build one first with `npx context-cube`.");
   const tool = installTool(r);
+  const added = opts.agent?.length ? addAgents(r, opts.agent) : [];
   const out = await installAgents(r, undefined, { shared: opts.shared });
-  return tool.updatedFrom ? [`Updated the project's copy of Context Cube from ${tool.updatedFrom} to ${version()}.`, ...out] : out;
+  return [
+    ...(tool.updatedFrom ? [`Updated the project's copy of Context Cube from ${tool.updatedFrom} to ${version()}.`] : []),
+    ...(added.length ? [`Set up for ${added.map((a) => getAdapter(a).name).join(" and ")} too. Commit the new files (AGENTS.md, .codex/, .agents/) so teammates get them.`] : []),
+    ...out,
+  ];
 }
 
-export async function uninstall(opts: { cwd?: string }): Promise<string[]> {
+export async function uninstall(opts: { cwd?: string; agent?: string }): Promise<string[]> {
+  if (opts.agent) return removeAgent(root(opts.cwd), opts.agent);
   return uninstallAgents(root(opts.cwd));
 }

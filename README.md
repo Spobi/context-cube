@@ -10,7 +10,7 @@ Context Cube keeps all of it, word for word, but arranges it so an agent reads a
 
 ## Quickstart (two minutes)
 
-You need Node 20 or newer and [Claude Code](https://code.claude.com), logged in. In your project's folder, run:
+You need Node 20 or newer and [Claude Code](https://code.claude.com), logged in: the command-line tool, or the Claude desktop app (see [Without a terminal](#without-a-terminal-the-claude-desktop-app)). In your project's folder, run:
 
 ```sh
 npx context-cube
@@ -49,6 +49,14 @@ If that's more than you want to spend now, answer `later` and give a time, such 
 - Ctrl+C cancels. The build keeps its place, so running the command again finishes it (now, or with `--at` to wait again).
 
 Nothing is added to your system's scheduler; the waiting is done by the command itself.
+
+### Without a terminal (the Claude desktop app)
+
+In a Claude desktop app session, ask Claude to set up Context Cube in the project ("run `npx github:Spobi/context-cube` here"). Claude runs it, and it uses the app's own copy of Claude Code, so nothing else needs installing besides Node. With no terminal to ask in, setup works one question at a time: each time it needs your say (spending usage, the files to use, the proposed rows, first rules it drafted, the spot check, rewriting your rules), it stops and prints the question, Claude asks you in the chat, and runs it again with your answer (`--answer <question>=<answer>`). Nothing is spent before you say yes, and every step already done is kept. Questions that don't need you get their defaults, printed as they go.
+
+The long part of the build runs in the background, so it keeps going when Claude's command ends. Claude checks on it with `node context-cube/.tool/cube.mjs build-status`, which shows how far it is and any question waiting for you; `build-status --stop` stops it, keeping its place. Leave the computer on and plugged in while it runs. Picking a later start ("later", then a time) works the same way: the background part waits until then.
+
+You can also run setup yourself in the desktop app's terminal pane (the Views menu, or Ctrl+`), exactly as in a terminal. Once the cube is built, desktop sessions use it like terminal ones: the app reads the same `CLAUDE.md` and `.claude/` settings, hooks included. On a Mac, the app finds Node through the PATH your shell profile sets.
 
 A new project with no memory files yet gets an empty cube (rules, history, invariants) and a few questions to write its first rules. A project with code and git history but no memory files gets its history built from its commits and a set of candidate invariants, drafted from reverted and fix commits and code comments, for you to approve.
 
@@ -120,13 +128,23 @@ To turn approvals off, ask your agent to; it runs `cube config set invariants.ap
 
 ## Teams
 
-A teammate who pulls the project gets the cube working without running setup. The cube's hooks go in the shared, committed `.claude/settings.json` (run setup with `--personal` to keep them in your own `.claude/settings.local.json` instead; the read logger always stays personal). At the first session in a clone, the session hook registers what git can't carry in a commit: the merge drivers, the pre-commit check for invariant text, and renumbering after merges. A hooks folder the project tracks itself (husky, say) is left alone. Running setup again on a cube whose hooks are personal offers to share them.
+A teammate who pulls the project gets the cube working without running setup (a Codex user trusts the project's `.codex/` folder once, with `/hooks`). The cube's hooks go in the shared, committed `.claude/settings.json` (run setup with `--personal` to keep them in your own `.claude/settings.local.json` instead; the read logger always stays personal). At the first session in a clone, the session hook registers what git can't carry in a commit: the merge drivers, the pre-commit check for invariant text, and renumbering after merges. A hooks folder the project tracks itself (husky, say) is left alone. Running setup again on a cube whose hooks are personal offers to share them.
 
 Commit `context-cube/` like any other folder (its `.logs/` stays on each person's machine); `cube check` warns while it isn't committed, since until then the cube and any originals archived in it exist only on one machine. Merges are handled for you: generated files never block a merge, history additions go in separate files so two people never edit the same one, each box's bookkeeping merges field by field (so an approval on one branch survives another branch's later changes to the same box), and if two branches both create box `Y05.X016`, the newer one is renumbered after the merge and every link to it is rewritten. `context-cube/.tool/cube.mjs` is the program your hooks run, so review a change to it like any code change; it should only change when someone updates Context Cube. GitHub isn't required; a local git repo works, and without git the cube still works as plain files.
 
-## Other agents
+## Codex
 
-Claude Code is supported first. For other agents, the cube writes an AGENTS.md block and works as plain files, without automatic logging, updating, or enforcement. The core knows nothing about any particular agent; support for another one is a small adapter.
+Codex reads the cube too. Setup includes it when it runs in a Codex session, when the project already has a `.codex/` folder, or when Codex is on the machine and you say yes; to add it to an existing cube, run `node context-cube/.tool/cube.mjs install --agent codex` (and `uninstall --agent codex` takes it out again). A team can mix the two: each agent gets its own files, and both read the same cube.
+
+- **Reading:** the always-loaded block goes in `AGENTS.md`, which Codex reads at the start of every session.
+- **Hooks** (`.codex/hooks.json`): the same guard, session notice, and update requests as in Claude Code. Codex edits files with patches, and the guard reads which files a patch changes, so invariant text and the cube's bookkeeping are protected the same way.
+- **Invariants that govern a file:** Codex has no path-scoped rule files, so the guard hook tells the agent which invariants govern a file when it's about to edit it, or after it prints the file through the shell, once per session.
+- **Commands that need a person** (approve, reject, restore, replace, delete, and changing a setting): Codex's hooks can't ask you, so the cube adds Codex command rules (`.codex/rules/context-cube.rules`) that make Codex ask before running one. The guard blocks any such command written so the rules might miss it (chained with another command, say), and tells the agent how to run it.
+- **Updates:** after a commit, the agent is told what to update and hands it to a `cube-updater` custom agent (`.codex/agents/`, low reasoning effort). The `cube-update` skill (`.agents/skills/`) is the manual trigger, like `/cube-update` in Claude Code.
+- **Trust:** Codex runs a project's hooks and command rules only after each person trusts its `.codex/` folder. In Codex, run `/hooks` once in the project. Until then Codex still reads the cube from `AGENTS.md`, without the guard or update requests.
+- **Not yet:** building a cube from existing files needs Claude Code (the command-line tool or the desktop app), whose models run the build's AI steps. The read logger and `cube stats` cover Claude Code sessions only. Codex reads only the first 32 KB of `AGENTS.md` by default and the block goes at the end, so `cube check` warns when a long `AGENTS.md` pushes it past that.
+
+For other agents, the cube writes an AGENTS.md block and works as plain files, without automatic logging, updating, or enforcement. The core knows nothing about any particular agent; support for another one is a small adapter.
 
 ## Updating
 

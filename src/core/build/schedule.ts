@@ -148,16 +148,18 @@ export async function waitForStart(s: Schedule, ask: Asker): Promise<boolean> {
   const now = new Date(s.clock.now());
   if (now < s.at) {
     s.stopAwake = s.clock.keepAwake?.();
-    ask.say(`\nThe rest starts at ${fmtClock(s.at, now)} (in ${fmtWait(s.at.getTime() - now.getTime())}). Until then this terminal waits:`);
-    ask.say(`  • Leave it open, and leave the computer on and plugged in. Nothing runs while it's asleep, so don't close the lid.${s.stopAwake ? " It's kept from going to sleep on its own." : ""}`);
-    ask.say("  • A question that comes up while you're away gets its default answer, printed here. The spot check at the end waits for you.");
+    // Relaying (no terminal), this is the background process.
+    const bg = !!ask.relay;
+    ask.say(`\nThe rest starts at ${fmtClock(s.at, now)} (in ${fmtWait(s.at.getTime() - now.getTime())}). Until then ${bg ? "this waits in the background" : "this terminal waits"}:`);
+    ask.say(`  • ${bg ? "Leave" : "Leave it open, and leave"} the computer on and plugged in. Nothing runs while it's asleep, so don't close the lid.${s.stopAwake ? " It's kept from going to sleep on its own." : ""}`);
+    ask.say(`  • A question that comes up while you're away gets its default answer, printed ${bg ? "in the log" : "here"}. The spot check at the end waits for you.`);
     ask.say(`  • If your plan hits its usage limit, it waits for the reset and keeps going, but starts nothing new after ${fmtClock(s.until)}.`);
-    ask.say("  • Ctrl+C cancels. The build keeps its place: run the command again to finish it now, or add --at <time> to wait again.");
+    if (!bg) ask.say("  • Ctrl+C cancels. The build keeps its place: run the command again to finish it now, or add --at <time> to wait again.");
     await sleepUntil(s.clock, s.at);
   }
   const started = new Date(s.clock.now());
   if (started.getTime() - s.at.getTime() > LATE_MS) {
-    const ok = await ask.confirm(`It's ${fmtClock(started)}. The rest was set to start at ${fmtClock(s.at)}, but couldn't (the computer was probably asleep). Start it now? It uses your plan's usage now.`, false);
+    const ok = await ask.confirm(`It's ${fmtClock(started)}. The rest was set to start at ${fmtClock(s.at)}, but couldn't (the computer was probably asleep). Start it now? It uses your plan's usage now.`, false, "start-late");
     if (!ok) {
       s.stopAwake?.();
       return false;

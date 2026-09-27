@@ -8,6 +8,7 @@ import { computeStats } from "../core/stats/reads";
 import { loadConfig } from "../core/config";
 import { detectMemoryFiles } from "../core/logs/memoryFiles";
 import { LIMIT_RE, UsageLimitError } from "../ai/runner";
+import { claudeBin } from "../adapters/claude-code/bin";
 import { prepareCopies, resetCopy, type Copies } from "./copies";
 import { benchDir, type Task, type TasksFile } from "./tasks";
 import { measureRetrieval, requiredFor, type Required, type Retrieval } from "./retrieval";
@@ -65,7 +66,7 @@ export function cleanEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEn
 
 function claude(args: string[], cwd: string, timeoutMs: number): Promise<{ stdout: string; stderr: string; code: number | null }> {
   return new Promise((resolve) => {
-    const child = spawn(process.env.CUBE_CLAUDE_BIN || "claude", args, { cwd, env: cleanEnv(), stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(claudeBin(), args, { cwd, env: cleanEnv(), stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => child.kill("SIGTERM"), timeoutMs);

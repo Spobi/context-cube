@@ -75,8 +75,35 @@ export interface AdapterCapabilities {
   permissionPrompts: boolean;
 }
 
+/** A tool call as the cube's hooks see it, whatever the agent calls its tools. */
+export type ToolCall =
+  /** Files an edit tool changes (as the agent named them: absolute, or relative to the session's cwd). */
+  | { kind: "edit"; files: string[] }
+  | { kind: "shell"; command: string }
+  | { kind: "other" };
+
+/** What the cube's hooks need to know about an agent's hook input and wording. */
+export interface HookDialect {
+  toolCall(input: { tool_name?: string; tool_input?: Record<string, unknown> }): ToolCall;
+  /** How the main session hands the update plan to the updater helper. */
+  updateHelper: string;
+  /** Tells the agent how the person can run a command it may not run itself. */
+  personRuns(cmd: string): string;
+  /**
+   * Person-only commands: "ask" answers the hook with a permission prompt
+   * (Claude Code); "rules" lets the agent's own command rules ask (Codex, whose
+   * hooks can't ask), for a command shaped exactly like those rules.
+   */
+  personPrompt: "ask" | "rules";
+  /** With "rules": will the agent's command rules ask the person before running this command? */
+  rulesWillAsk?(root: string, cmd: string): boolean;
+}
+
 export interface AgentAdapter {
   id: string;
+  /** The agent's name for people ("Claude Code", "Codex"). */
+  name: string;
+  hookDialect?: HookDialect;
   /** Is this agent used in this project (or installed on this machine)? */
   detect(projectRoot: string): Promise<boolean>;
   capabilities: AdapterCapabilities;

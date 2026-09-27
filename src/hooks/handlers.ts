@@ -9,6 +9,10 @@ import { drawerRecord, isRecordBox, recordRefusal } from "../core/records";
 import { ROW_DIR_RE } from "../core/format/ids";
 import { gitRoot } from "../core/git";
 import { isCommitCommand, lastCommit, loadMarks, onlyCubeFiles, saveMarks, updatePlan } from "../core/update";
+import { dialectFor, getAdapter } from "../adapters/registry";
+import type { HookDialect } from "../adapters/types";
+import { pathRulesFor, rulesForFile } from "../core/code/pathRules";
+import { bashReadFiles } from "../core/logs/extract";
 
 /**
  * Hook behaviors beyond logging. Each checks its own feature flag, so one
@@ -32,8 +36,6 @@ registerHookHandler(async (event, input, root, features) => {
 });
 
 // ---------- guard: protected files and person-only commands (plan 9.2, 9.3) ----------
-
-const EDIT_TOOLS = new Set(["Edit", "Write", "MultiEdit", "NotebookEdit"]);
 
 export function protectedReason(root: string, file: string): string | undefined {
   const rel = relToRoot(root, resolve(root, file));
@@ -192,13 +194,22 @@ const PERSON_ONLY_WHAT: Record<string, string> = {
   replace: "Replacing a record's text",
 };
 
-/** Asks the person to confirm, or blocks when this session skips permission prompts. */
-function needsPerson(what: string, cmd: string, input: Record<string, unknown>): HookOutcome {
+/**
+ * Asks the person to confirm, or blocks when this session skips permission
+ * prompts. An agent whose hooks can't ask (Codex) has its own command rules
+ * ask instead, for a command shaped so the rules match it; anything else is
+ * blocked with how to run it.
+ */
+function needsPerson(what: string, cmd: string, input: Record<string, unknown>, root: string, dialect: HookDialect): HookOutcome {
   const mode = String(input.permission_mode ?? "default");
   if (mode === "bypassPermissions" || mode === "dontAsk") {
+    return { exitCode: 2, stderr: `${what} needs a person, and this session skips permission prompts. ${dialect.personRuns(cmd.trim())}.` };
+  }
+  if (dialect.personPrompt === "rules") {
+    if (dialect.rulesWillAsk?.(root, cmd)) return { exitCode: 0 };
     return {
       exitCode: 2,
-      stderr: `${what} needs a person, and this session skips permission prompts. Ask the person to run it themselves (in Claude Code they can type: ! ${cmd.trim()}).`,
+      stderr: `${what} needs a person's yes. Run it on its own, as \`${TOOL_COMMAND} <command> …\` with nothing before or after it in the same command, and Codex asks the person to confirm it. Or: ${dialect.personRuns(cmd.trim())}.`,
     };
   }
   return {
@@ -216,18 +227,20 @@ function needsPerson(what: string, cmd: string, input: Record<string, unknown>):
 /** Why the agent is kept out of the archive, and where to look instead. */
 export const ARCHIVE_REASON = `context-cube/.state/archive/ holds original memory files whose content now lives in the cube, word for word. Read the cube instead: start at context-cube/CUBE.md, or search it with: ${TOOL_COMMAND} find <words>. If the person wants an original file back, they can run: ${TOOL_COMMAND} restore <file>`;
 
-registerHookHandler(async (event, input, root, features): Promise<HookOutcome | void> => {
+registerHookHandler(async (event, input, root, features, agent): Promise<HookOutcome | void> => {
   if (event !== "pre-tool-use" || !features.has("guard")) return;
-  const tool = input.tool_name ?? "";
-  const ti = (input.tool_input ?? {}) as Record<string, unknown>;
-  if (EDIT_TOOLS.has(tool)) {
-    const file = String(ti.file_path ?? ti.notebook_path ?? "");
-    const reason = file ? protectedReason(root, file) : undefined;
-    if (reason) return { exitCode: 2, stderr: reason };
-    return;
+  const dialect = dialectFor(agent);
+  const call = dialect.toolCall(input);
+  const cwd = input.cwd || root;
+  if (call.kind === "edit") {
+    for (const file of call.files) {
+      const reason = protectedReason(root, resolve(cwd, file));
+      if (reason) return { exitCode: 2, stderr: reason };
+    }
+    return ruleNotices(root, agent, input, call.files.map((f) => resolve(cwd, f)));
   }
-  if (tool !== "Bash") return;
-  const cmd = String(ti.command ?? "");
+  if (call.kind !== "shell") return;
+  const cmd = call.command;
   const usesTool = /context-cube\/\.tool\/cube\.mjs|\bcube\s|npx\s+context-cube/.test(cmd);
   if (ARCHIVE_IN_BASH.test(cmd) && !usesTool) return { exitCode: 2, stderr: ARCHIVE_REASON };
   const file = usesTool ? undefined : protectedWrite(cmd);
@@ -238,7 +251,7 @@ registerHookHandler(async (event, input, root, features): Promise<HookOutcome | 
     return { exitCode: 2, stderr: reason ?? `That command would change a file Context Cube protects. Use ${TOOL_COMMAND} commands instead.` };
   }
   const m = PERSON_ONLY.exec(cmd);
-  if (m) return needsPerson(m[1].startsWith("config") ? "Changing a Context Cube setting" : PERSON_ONLY_WHAT[m[1]], cmd, input);
+  if (m) return needsPerson(m[1].startsWith("config") ? "Changing a Context Cube setting" : PERSON_ONLY_WHAT[m[1]], cmd, input, root, dialect);
   const del = deleteTargets(cmd);
   if (del.ids.length || del.unknown) {
     const cube = loadCube(root);
@@ -246,16 +259,54 @@ registerHookHandler(async (event, input, root, features): Promise<HookOutcome | 
       const box = getBox(cube, id);
       return box && isRecordBox(root, cube, box) ? [box.id] : [];
     });
-    if (records.length === 1) return needsPerson(`Deleting ${records[0]}, which holds a record (text moved from the original files, or a closed history entry),`, cmd, input);
-    if (records.length) return needsPerson(`Deleting ${records.join(", ")}, which hold records (text moved from the original files, or closed history entries),`, cmd, input);
-    if (del.unknown) return needsPerson("Deleting a box named through a shell variable (it may hold a record)", cmd, input);
+    if (records.length === 1) return needsPerson(`Deleting ${records[0]}, which holds a record (text moved from the original files, or a closed history entry),`, cmd, input, root, dialect);
+    if (records.length) return needsPerson(`Deleting ${records.join(", ")}, which hold records (text moved from the original files, or closed history entries),`, cmd, input, root, dialect);
+    if (del.unknown) return needsPerson("Deleting a box named through a shell variable (it may hold a record)", cmd, input, root, dialect);
   }
+});
+
+// ---------- rule notices, for agents without path rule files (plan 8.5) ----------
+
+/**
+ * Claude Code loads a path rule when the agent reads or edits a file an
+ * invariant governs. Codex has no such rule files, so its guard hook adds the
+ * same one-line rules as context: before an edit, and after a shell command
+ * that printed the file. Each rule once per session.
+ */
+function ruleNotices(root: string, agent: string, input: Record<string, unknown>, files: string[]): HookOutcome | undefined {
+  if (getAdapter(agent).capabilities.pathRules || !files.length) return undefined;
+  const rels = files.map((f) => relToRoot(root, f)).filter((f) => !f.startsWith("/") && !f.startsWith(`${CUBE_DIR}/`));
+  if (!rels.length) return undefined;
+  const rules = pathRulesFor(loadCube(root));
+  if (!rules.length) return undefined;
+  const session = String(input.session_id ?? "unknown");
+  const marks = loadMarks(root, session);
+  const shown = new Set(marks.shownRules ?? []);
+  const out: string[] = [];
+  for (const rel of rels) {
+    const fresh = rulesForFile(rules, rel).filter((r) => !shown.has(r.id));
+    if (!fresh.length) continue;
+    out.push(`For ${rel}:`, ...fresh.map((r) => r.body.trim()));
+    fresh.forEach((r) => shown.add(r.id));
+  }
+  if (!out.length) return undefined;
+  marks.shownRules = [...shown];
+  saveMarks(root, session, marks);
+  return { exitCode: 0, context: out.join("\n") };
+}
+
+registerHookHandler(async (event, input, root, features, agent): Promise<HookOutcome | void> => {
+  if (event !== "post-tool-use" || !features.has("guard")) return;
+  const call = dialectFor(agent).toolCall(input);
+  if (call.kind !== "shell") return;
+  return ruleNotices(root, agent, input, bashReadFiles(call.command, input.cwd || root));
 });
 
 // ---------- update: after a commit, or at the end of work (plan 8.1) ----------
 
-registerHookHandler(async (event, input, root, features): Promise<HookOutcome | void> => {
+registerHookHandler(async (event, input, root, features, agent): Promise<HookOutcome | void> => {
   if (!features.has("update")) return;
+  const dialect = dialectFor(agent);
   const session = String(input.session_id ?? "unknown");
   let trigger: string;
   try {
@@ -266,20 +317,19 @@ registerHookHandler(async (event, input, root, features): Promise<HookOutcome | 
   if (!gitRoot(root) && trigger === "commit") trigger = "stop";
 
   if (event === "post-tool-use") {
-    const tool = input.tool_name ?? "";
-    const ti = (input.tool_input ?? {}) as Record<string, unknown>;
-    if (EDIT_TOOLS.has(tool)) {
+    const call = dialect.toolCall(input);
+    if (call.kind === "edit") {
       const marks = loadMarks(root, session);
-      const f = relToRoot(root, String(ti.file_path ?? ti.notebook_path ?? ""));
-      if (!f.startsWith(`${CUBE_DIR}/`)) {
+      const files = call.files.map((f) => relToRoot(root, resolve(input.cwd || root, f))).filter((f) => !f.startsWith(`${CUBE_DIR}/`));
+      if (files.length) {
         marks.edits++;
-        marks.files = [...new Set([...(marks.files ?? []), f])].slice(-200);
+        marks.files = [...new Set([...(marks.files ?? []), ...files])].slice(-200);
         saveMarks(root, session, marks);
       }
       return;
     }
-    if (tool !== "Bash" || trigger !== "commit") return;
-    if (!isCommitCommand(String(ti.command ?? ""))) return;
+    if (call.kind !== "shell" || trigger !== "commit") return;
+    if (!isCommitCommand(call.command)) return;
     const commit = lastCommit(root);
     if (!commit || onlyCubeFiles(commit.files)) return;
     const marks = loadMarks(root, session);
@@ -287,10 +337,7 @@ registerHookHandler(async (event, input, root, features): Promise<HookOutcome | 
     marks.handledCommits.push(commit.hash);
     marks.updateRequested = true;
     saveMarks(root, session, marks);
-    return {
-      exitCode: 0,
-      stdout: JSON.stringify({ hookSpecificOutput: { hookEventName: "PostToolUse", additionalContext: updatePlan(root, { commit }) } }),
-    };
+    return { exitCode: 0, context: updatePlan(root, { commit, helper: dialect.updateHelper }) };
   }
 
   if (event === "stop") {
@@ -299,6 +346,6 @@ registerHookHandler(async (event, input, root, features): Promise<HookOutcome | 
     if (marks.updateRequested || marks.edits === 0) return;
     marks.updateRequested = true;
     saveMarks(root, session, marks);
-    return { exitCode: 0, stdout: JSON.stringify({ decision: "block", reason: updatePlan(root, { files: marks.files ?? [], reason: "before finishing" }) }) };
+    return { exitCode: 0, stdout: JSON.stringify({ decision: "block", reason: updatePlan(root, { files: marks.files ?? [], reason: "before finishing", helper: dialect.updateHelper }) }) };
   }
 });

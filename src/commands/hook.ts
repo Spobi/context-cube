@@ -7,18 +7,25 @@ import { loadConfig } from "../core/config";
 import { hookRoot } from "../core/tool";
 
 /**
- * `cube hook <event> --features a,b`: the entry point Claude Code hooks call.
- * Logging must never disturb the session, so every error is swallowed and
- * written to .logs/errors.log. Only guard hooks may exit with code 2 (block).
+ * `cube hook <event> --agent <id> --features a,b`: the entry point agent hooks
+ * call (Claude Code's when --agent is left out, as in hooks written before it
+ * existed). Logging must never disturb the session, so every error is
+ * swallowed and written to .logs/errors.log. Only guard hooks may exit with
+ * code 2 (block).
  */
 
 export interface HookOutcome {
   exitCode: number;
   stdout?: string;
   stderr?: string;
+  /** Text for the agent to read; merged with other handlers' into one answer. */
+  context?: string;
 }
 
-export type HookHandler = (event: string, input: HookInput, root: string, features: Set<string>) => Promise<HookOutcome | void>;
+export type HookHandler = (event: string, input: HookInput, root: string, features: Set<string>, agent: string) => Promise<HookOutcome | void>;
+
+/** Hook event names as both agents spell them in JSON answers. */
+const EVENT_NAMES: Record<string, string> = { "pre-tool-use": "PreToolUse", "post-tool-use": "PostToolUse", "session-start": "SessionStart" };
 
 /** Handlers added by later phases (session notice, guards, update trigger). */
 const extraHandlers: HookHandler[] = [];
@@ -34,7 +41,7 @@ export async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-export async function handleHook(event: string, input: HookInput, root: string, features: Set<string>): Promise<HookOutcome> {
+export async function handleHook(event: string, input: HookInput, root: string, features: Set<string>, agent = "claude-code"): Promise<HookOutcome> {
   let charsPerToken = 4;
   try {
     charsPerToken = loadConfig(root).tokens.charsPerToken;
@@ -42,6 +49,7 @@ export async function handleHook(event: string, input: HookInput, root: string, 
     // A broken config must not stop logging.
   }
   const outcome: HookOutcome = { exitCode: 0 };
+  const contexts: string[] = [];
   if (features.has("log")) {
     try {
       logEvent(event, input, root, charsPerToken);
@@ -51,8 +59,9 @@ export async function handleHook(event: string, input: HookInput, root: string, 
   }
   for (const h of extraHandlers) {
     try {
-      const r = await h(event, input, root, features);
+      const r = await h(event, input, root, features, agent);
       if (!r) continue;
+      if (r.context) contexts.push(r.context);
       if (r.stdout) outcome.stdout = [outcome.stdout, r.stdout].filter(Boolean).join("\n");
       if (r.stderr) outcome.stderr = [outcome.stderr, r.stderr].filter(Boolean).join("\n");
       if (r.exitCode !== 0) outcome.exitCode = r.exitCode;
@@ -60,7 +69,33 @@ export async function handleHook(event: string, input: HookInput, root: string, 
       logError(root, `hook ${event}`, err);
     }
   }
+  addContext(outcome, event, contexts);
   return outcome;
+}
+
+/**
+ * Puts the handlers' context into the one answer the agent reads: plain text at
+ * session start, else additionalContext in a JSON answer (added to a handler's
+ * own JSON answer, such as a permission prompt, when there is one).
+ */
+function addContext(outcome: HookOutcome, event: string, contexts: string[]): void {
+  if (!contexts.length || outcome.exitCode === 2) return;
+  const text = contexts.join("\n\n");
+  if (event === "session-start") {
+    outcome.stdout = [outcome.stdout, text].filter(Boolean).join("\n");
+    return;
+  }
+  const name = EVENT_NAMES[event];
+  if (!name) return;
+  let answer: Record<string, any> = {};
+  try {
+    if (outcome.stdout) answer = JSON.parse(outcome.stdout);
+  } catch {
+    return;
+  }
+  const own = answer.hookSpecificOutput ?? {};
+  answer.hookSpecificOutput = { ...own, hookEventName: name, additionalContext: [own.additionalContext, text].filter(Boolean).join("\n\n") };
+  outcome.stdout = JSON.stringify(answer);
 }
 
 function logEvent(event: string, input: HookInput, root: string, charsPerToken: number): void {
@@ -105,7 +140,7 @@ function logEvent(event: string, input: HookInput, root: string, charsPerToken: 
   }
 }
 
-export async function hookCommand(event: string, opts: { features?: string }): Promise<number> {
+export async function hookCommand(event: string, opts: { features?: string; agent?: string }): Promise<number> {
   let input: HookInput = {};
   let root: string;
   try {
@@ -120,7 +155,7 @@ export async function hookCommand(event: string, opts: { features?: string }): P
     return 0;
   }
   const features = new Set((opts.features ?? "log").split(",").map((s) => s.trim()).filter(Boolean));
-  const outcome = await handleHook(event, input, root, features);
+  const outcome = await handleHook(event, input, root, features, opts.agent ?? "claude-code");
   if (outcome.stdout) process.stdout.write(outcome.stdout.endsWith("\n") ? outcome.stdout : `${outcome.stdout}\n`);
   if (outcome.stderr) process.stderr.write(outcome.stderr.endsWith("\n") ? outcome.stderr : `${outcome.stderr}\n`);
   return outcome.exitCode;

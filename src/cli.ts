@@ -1,4 +1,4 @@
-import { Command } from "commander";
+import { Command, Option } from "commander";
 import { olderThanProject, version } from "./core/tool";
 import { hookCommand, readStdin } from "./commands/hook";
 import { logInstall, logReport, logUninstall } from "./commands/log";
@@ -55,7 +55,8 @@ export function buildProgram(): Command {
       .option("--at <time>", "start the big part of the build (after you review the rows) at this time, like 23:30 or 11:30pm, say after your plan's usage resets; the terminal waits until then")
       .option("--shared", "put the cube's hooks in the shared, committed .claude/settings.json (the default for a new cube)")
       .option("--personal", "put the cube's hooks in your personal .claude/settings.local.json instead, so teammates don't get them")
-      .option("--without-logger", "don't log what the agent reads");
+      .option("--without-logger", "don't log what the agent reads")
+      .option("--answer <key=answer>", "the person's answer to a question it stopped at, when running without a terminal (repeatable)", collect);
   const runSetup = run((opts) => setup({ ...opts, shared: opts.personal ? false : opts.shared ? true : undefined, logger: opts.withoutLogger ? false : undefined }));
   setupOpts(program.command("setup").description("Guided setup: build a cube from what exists, or start a fresh one. The same as running with no command.")).action(runSetup);
   setupOpts(program).action(runSetup);
@@ -64,7 +65,7 @@ export function buildProgram(): Command {
   program
     .command("init")
     .description("Create an empty cube: the rules, history, and invariants rows.")
-    .option("--agent <id>", "agent adapter to write the always-loaded block for (claude-code, generic)", collect)
+    .option("--agent <id>", "agent to set the cube up for: claude-code, codex, or generic (a plain AGENTS.md block) (repeatable)", collect)
     .option("--history-unit <unit>", "one history entry per: build, release, pr, day, commit, session")
     .action(run((opts) => core.init({ agents: opts.agent, historyUnit: opts.historyUnit })));
 
@@ -257,16 +258,19 @@ export function buildProgram(): Command {
     .command("update-plan")
     .description("Show what to update in the cube after a change: linked boxes, the open entry, and the commands.")
     .option("--commit <ref>", "a commit (default: the last one)")
+    .option("--agent <id>", "word the plan for this agent (claude-code, codex)")
     .action(run((opts) => living.planCmd(opts)));
 
   program
     .command("install")
     .description("Install the cube into the agent: always-loaded block, path rules, hooks, permission rules, updater helper, pre-commit check.")
-    .option("--shared", "put hooks in the shared, committed .claude/settings.json (default: your personal settings)")
+    .option("--shared", "put hooks in the shared, committed settings (.claude/settings.json; for Codex, .codex/hooks.json)")
+    .option("--agent <id>", "also set the cube up for this agent: codex, claude-code, or generic (a plain AGENTS.md block) (repeatable)", collect)
     .action(run((opts) => living.install(opts)));
   program
     .command("uninstall")
     .description("Remove everything `cube install` added. The cube's files stay.")
+    .option("--agent <id>", "remove only what was installed for this agent (claude-code, codex)")
     .action(run((opts) => living.uninstall(opts)));
 
   program
@@ -307,7 +311,9 @@ export function buildProgram(): Command {
     .option("--add <path>", "include this file even if it doesn't look like memory (repeatable)", collect)
     .option("--preset <preset>", "economy, balanced, or max (default: the cube's setting)")
     .option("--at <time>", "start the big part of the build (after you review the rows) at this time, like 23:30 or 11:30pm, say after your plan's usage resets; the terminal waits until then")
-    .action(run((opts) => build(opts)));
+    .option("--answer <key=answer>", "the person's answer to a question it stopped at, when running without a terminal (repeatable)", collect)
+    .addOption(new Option("--background-child", "the build's background process (internal)").hideHelp())
+    .action(run((opts) => build({ ...opts, backgroundChild: !!opts.backgroundChild })));
   program
     .command("recipe")
     .description("recipe.json: how the source files are structured.")
@@ -315,8 +321,9 @@ export function buildProgram(): Command {
     .description("Dry-run recipe.json and report what it would produce. Changes nothing.")
     .action(run((opts) => recipeCheck(opts)));
   program
-    .command("build-status", { hidden: true })
-    .description("Show which build stages are done.")
+    .command("build-status")
+    .description("Show how a build is going: the stages done, a build running in the background, and any question waiting for the person.")
+    .option("--stop", "stop a build running in the background (it keeps its place)")
     .action(run((opts) => buildStatus(opts)));
 
   // ---------- the A/B experiment ----------
@@ -379,7 +386,8 @@ export function buildProgram(): Command {
     .command("hook <event>", { hidden: true })
     .description("Entry point for agent hooks (internal).")
     .option("--features <list>", "comma-separated features", "log")
-    .action(async (event: string, opts: { features?: string }) => {
+    .option("--agent <id>", "the agent whose hook this is (claude-code, codex)", "claude-code")
+    .action(async (event: string, opts: { features?: string; agent?: string }) => {
       process.exitCode = await hookCommand(event, opts);
     });
 

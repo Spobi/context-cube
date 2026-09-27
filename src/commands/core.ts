@@ -49,6 +49,8 @@ export async function init(opts: InitOptions = {}): Promise<string[]> {
   const config = exists(p.config) ? loadConfig(root) : defaultConfig();
   if (opts.agents?.length) config.agents = [...new Set([...config.agents, ...opts.agents])];
   if (!config.agents.length) config.agents = ["claude-code"];
+  // Codex writes the AGENTS.md block itself.
+  if (config.agents.includes("codex")) config.agents = config.agents.filter((a) => a !== "generic");
   if (opts.historyUnit) config.history.unit = opts.historyUnit;
   saveConfig(root, config);
   writeStateScaffold(root);
@@ -59,7 +61,7 @@ export async function init(opts: InitOptions = {}): Promise<string[]> {
   return [
     `Created a cube in ${p.cube}`,
     "  Y00 rules, Y01 history, Y02 invariants",
-    `  The always-loaded block is in ${config.agents.map((a) => (a === "generic" ? "AGENTS.md" : "CLAUDE.md")).join(" and ")}.`,
+    `  The always-loaded block is in ${[...new Set(config.agents.map((a) => (a === "claude-code" ? "CLAUDE.md" : "AGENTS.md")))].join(" and ")}.`,
     "",
     `Add a rule:   ${TOOL_COMMAND} new-box Y00 "short-name" --summary "The rule, in one line." --read-when "Always."`,
     `See the rows: context-cube/CUBE.md`,

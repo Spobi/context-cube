@@ -32,7 +32,7 @@ import { loadRecipe, type Recipe } from "./recipe";
 import { appendGlue, bulkCreate, chronological, effectiveDate, nameFor, sourceLabel, type BoxSpec } from "./place";
 import { loadBoxState, saveBoxState } from "../state/state";
 import { placedCoverage } from "./coverage";
-import { buildDir, BuildStopped, loadChunks, type BuildContext, type BuildState, type Stage } from "./pipeline";
+import { buildDir, BuildStopped, loadChunks, saveState, type BuildContext, type BuildState, type Stage } from "./pipeline";
 import { catchUp, readText } from "./catchup";
 import type { Chunk } from "./split";
 import type { AICallLog } from "../../ai/runner";
@@ -134,12 +134,12 @@ async function review(ctx: BuildContext, state: BuildState) {
     const proposal = readJsonOr<RowsOut>(proposalPath(ctx.root), { rows: [], place: [] });
     for (const l of describeProposal(proposal)) ctx.ask.say(l);
     if (!proposal.rows.length) return;
-    const choice = await ctx.ask.choose("Accept these rows?", ["accept", "redo", "edit"], "accept");
+    const choice = await ctx.ask.choose("Accept these rows?", ["accept", "redo", "edit"], "accept", "rows");
     if (choice === "accept") return;
     if (choice === "edit") {
       throw new BuildStopped(`Edit ${proposalPath(ctx.root)}, then run \`cube build\` again to review it.`);
     }
-    const feedback = await ctx.ask.text("What should change?", "");
+    const feedback = await ctx.ask.text("What should change?", "", "rows-feedback");
     const { chunks } = loadChunks(ctx.root);
     const next = await proposeRows(ctx, chunks, loadRecipe(ctx.root), feedback || "Try a clearer split into rows.");
     writeJson(proposalPath(ctx.root), next);
@@ -418,12 +418,16 @@ async function gitextras(ctx: BuildContext, state: BuildState) {
 
   if (!has("rules") && !cube.rows.find((r) => r.type === "rules")!.boxes.length) {
     const facts = projectFacts(root);
-    let drafted: InterviewOutput | undefined;
-    if (ctx.ask.interactive) drafted = await interview(root, ctx.ask, runCtx(ctx));
-    else if (facts) drafted = (await runStep(interviewStep, { answers: [], config: facts }, { ...runCtx(ctx), root, label: "first rules" })).output;
+    // A run that stopped to ask about these (no terminal) comes back with them drafted.
+    let drafted = state.draftedRules as InterviewOutput | undefined;
+    if (!drafted && ctx.ask.interactive) drafted = await interview(root, ctx.ask, runCtx(ctx));
+    else if (!drafted && facts) drafted = (await runStep(interviewStep, { answers: [], config: facts }, { ...runCtx(ctx), root, label: "first rules" })).output;
     if (drafted?.rules.length) {
+      state.draftedRules = drafted;
+      saveState(root, state);
       for (const l of ["", "Drafted rules from the project's config files:", ...drafted.rules.map((r, i) => `  ${i + 1}. ${r.text}`)]) ctx.ask.say(l);
-      if (await ctx.ask.confirm("Add these rules?", true)) {
+      // They'd load into every session, so the person decides (when away overnight, the default does).
+      if (await ctx.ask.confirm("Add these rules?", true, "add-rules")) {
         bulkCreate(root, 0, drafted.rules.map((r) => ({ name: r.name, summary: r.text.slice(0, 200), readWhen: "Always.", body: `${r.text}\n`, writtenBy: "ai" as const })));
       }
     }
@@ -691,8 +695,12 @@ async function spotcheck(ctx: BuildContext, state: BuildState) {
   const root = ctx.root;
   const cube = loadCube(root);
   const ai = allBoxes(cube).filter((b) => !b.isRoot && b.header?.written_by === "ai" && b.header.source);
-  const pick = sample(ai, 10);
+  // The same boxes on a run that comes back with the person's answer (no terminal).
+  const kept = ((state.spotPick as string[] | undefined) ?? []).map((id) => ai.find((b) => b.id === id)).filter((b): b is Box => !!b);
+  const pick = kept.length ? kept : sample(ai, 10);
   if (!pick.length) return;
+  state.spotPick = pick.map((b) => b.id);
+  saveState(root, state);
   const lines = ["# Spot check", "", "Ten boxes with AI-written summaries, next to the text they came from. Check that each summary, read-when line, and link is right.", ""];
   for (const b of pick) {
     const h = b.header!;
@@ -707,8 +715,8 @@ async function spotcheck(ctx: BuildContext, state: BuildState) {
   const path = join(buildDir(root), "spot-check.md");
   writeText(path, lines.join("\n"));
   ctx.ask.say(`\nSpot check: ${pick.length} random boxes are shown next to their source in\n  ${path}`);
-  const answer = await ctx.ask.text("Look them over. Type the ids of any that look wrong, separated by spaces (or press Enter if they all look right):", "");
-  const wrong = new Set(answer.split(/[\s,]+/).filter(Boolean).map((s) => s.toUpperCase()));
+  const answer = await ctx.ask.text("Look them over. Type the ids of any that look wrong, separated by spaces (or press Enter if they all look right):", "", "spot-check");
+  const wrong = new Set(answer.split(/[\s,]+/).filter((s) => /^Y\d+\.X\d+$/i.test(s)).map((s) => s.toUpperCase()));
   const stepOf = (b: Box) => (getRow(cube, b.rowNum)!.type === "history" ? "history-summaries" : getRow(cube, b.rowNum)!.type === "invariants" ? "invariant-labels" : "box-overviews");
   for (const b of pick) recordQuality(root, { kind: wrong.has(b.id) ? "spot-check-fail" : "spot-check-ok", step: stepOf(b), id: b.id });
   state.spotCheck = { shown: pick.length, wrong: [...wrong] };

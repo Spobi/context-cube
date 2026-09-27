@@ -33,6 +33,13 @@ export type Stage = (typeof STAGES)[number];
 /** What runs on its own when the person picks a later start: after the row review, up to the spot check. */
 export const UNATTENDED: readonly Stage[] = ["place", "gitextras", "enrich", "codelinks", "backlinks", "check"];
 
+/**
+ * With no terminal (an agent relaying questions), stages that spend usage after
+ * the go-ahead run in a background process, so they outlast the agent's command
+ * and its session; the process stops at the next question for the person.
+ */
+export const BACKGROUND: readonly Stage[] = ["recipe", "rows", ...UNATTENDED];
+
 export interface BuildState {
   version: 1;
   done: Stage[];
@@ -41,6 +48,8 @@ export interface BuildState {
   sources?: ConfirmedSource[];
   estimate?: Estimate;
   approvedEstimate?: boolean;
+  /** The later start the person picked (ISO), kept until the unattended part starts: a run without a terminal takes several commands to get there. */
+  startAt?: string;
   chunks?: number;
   refs?: { total: number; resolved: number };
   [key: string]: unknown;
@@ -61,6 +70,15 @@ export interface BuildContext {
   /** Set when the person picks a later start for the unattended stages. */
   schedule?: Schedule;
   clock?: Clock;
+  /** Relaying questions with no terminal: hand the BACKGROUND stages to a background process. */
+  detach?: boolean;
+}
+
+/** Thrown before a BACKGROUND stage when the build should carry on in a background process. */
+export class Detach extends Error {
+  constructor(public stage: Stage) {
+    super(`carry on in the background from "${stage}"`);
+  }
 }
 
 export function buildDir(root: string): string {
@@ -103,10 +121,18 @@ function presetOf(ctx: BuildContext): Preset {
 }
 
 /** Waits for a later start before the unattended stages, and hands questions back to the person after them. */
-async function unattended(ctx: BuildContext, on: boolean): Promise<void> {
+async function unattended(ctx: BuildContext, state: BuildState, on: boolean): Promise<void> {
   const s = ctx.schedule!;
   if (on && s.state === "waiting") {
-    if (!(await waitForStart(s, ctx.ask))) throw new BuildStopped("Didn't start. Run the command again to finish the build now, or add --at <time> to pick another time.");
+    const forget = () => {
+      delete state.startAt;
+      saveState(ctx.root, state);
+    };
+    // In a terminal, Ctrl+C during the wait cancels it: running again finishes now.
+    if (!ctx.ask.relay) forget();
+    const started = await waitForStart(s, ctx.ask);
+    forget();
+    if (!started) throw new BuildStopped("Didn't start. Run the command again to finish the build now, or add --at <time> to pick another time.");
     s.person = ctx.ask;
     ctx.ask = awayAsker(s.person);
     s.state = "running";
@@ -134,7 +160,8 @@ export async function runPipeline(ctx: BuildContext, stages: Partial<Record<Stag
     const fn = all[stage];
     if (!fn) continue;
     if (!state.done.includes(stage)) {
-      if (ctx.schedule) await unattended(ctx, UNATTENDED.includes(stage));
+      if (ctx.detach && BACKGROUND.includes(stage)) throw new Detach(stage);
+      if (ctx.schedule) await unattended(ctx, state, UNATTENDED.includes(stage));
       await fn(ctx, state);
       state.done.push(stage);
       saveState(ctx.root, state);
@@ -165,7 +192,7 @@ async function classify(ctx: BuildContext, state: BuildState) {
   // Even this small step asks first: no usage is spent before an estimate (plan 7, Phase 8).
   const est = classifyEstimate(ctx.root, cands);
   const tier = tierFor("classify", presetOf(ctx));
-  const ok = await ctx.ask.confirm(`Read their headings and a short sample with a ${TIER_SIZE[tier] === "smallest" ? "small" : TIER_SIZE[tier]} AI model (${TIER_NAME[tier]}, about ${fmtInt(est)} tokens of your plan's usage)?`, true);
+  const ok = await ctx.ask.confirm(`Read their headings and a short sample with a ${TIER_SIZE[tier] === "smallest" ? "small" : TIER_SIZE[tier]} AI model (${TIER_NAME[tier]}, about ${fmtInt(est)} tokens of your plan's usage)?`, true, "read-sample");
   if (!ok) throw new BuildStopped("Stopped before using any AI. Run the build again when you're ready.");
   ctx.ask.say(`Reading headings and a short sample of each…`);
   const parallel = loadConfig(ctx.root).ai.parallel;
@@ -184,9 +211,9 @@ async function confirm(ctx: BuildContext, state: BuildState) {
     ctx.ask.say("\nHere's what I found:");
     for (const c of useful) ctx.ask.say(`  • ${describeClass(c)}`);
     if (skipped.length) ctx.ask.say(`  (Skipping ${skipped.length} that don't look like project memory: ${skipped.slice(0, 6).map((c) => c.path).join(", ")}${skipped.length > 6 ? ", …" : ""})`);
-    const all = await ctx.ask.confirm(`Use these ${useful.length} file${useful.length === 1 ? "" : "s"} to build the cube?`, true);
+    const all = await ctx.ask.confirm(`Use these ${useful.length} file${useful.length === 1 ? "" : "s"} to build the cube?`, true, "use-files");
     for (const c of useful) {
-      const use = all || (await ctx.ask.confirm(`  Use ${c.path}?`, true));
+      const use = all || (await ctx.ask.confirm(`  Use ${c.path}?`, true, `use:${c.path}`));
       if (use) chosen.push(toConfirmed(c.role === "other" ? { ...c, role: "notes" } : c, byPath.get(c.path)));
     }
   }
@@ -215,9 +242,9 @@ async function estimate(ctx: BuildContext, state: BuildState) {
   let choice: string;
   if (later.length) {
     ctx.ask.say(`\nIf that's a lot for now, answer "later": the steps before your row review run now (${fmtApprox(now.reduce((n, s) => n + s.tokens, 0))}), and the rest starts on its own at a time you pick, like tonight after your plan's usage resets.`);
-    choice = await ctx.ask.choose("Go ahead?", ["now", "later", "no"], ctx.schedule ? "later" : "now");
+    choice = await ctx.ask.choose("Go ahead?", ["now", "later", "no"], ctx.schedule ? "later" : "now", "go-ahead");
   } else {
-    choice = (await ctx.ask.confirm("Go ahead?", true)) ? "now" : "no";
+    choice = (await ctx.ask.confirm("Go ahead?", true, "go-ahead")) ? "now" : "no";
   }
   state.approvedEstimate = choice !== "no";
   if (choice === "no") throw new BuildStopped("Stopped before using any AI. Run the build again when you're ready.");
@@ -227,13 +254,14 @@ async function estimate(ctx: BuildContext, state: BuildState) {
   }
   const clock = ctx.clock ?? realClock;
   for (let i = 0; i < 3 && !ctx.schedule; i++) {
-    const t = await ctx.ask.text("Start the rest at what time? (like 23:30 or 11:30pm; in Claude Code, /usage shows when your usage resets)", "");
+    const t = await ctx.ask.text("Start the rest at what time? (like 23:30 or 11:30pm; your plan's usage page shows when it resets: /usage in Claude Code, or Settings → Usage on claude.ai)", "", "start-at");
     const at = parseClock(t, new Date(clock.now()));
     if (at) ctx.schedule = makeSchedule(at, clock);
     else ctx.ask.say(t ? `  "${t}" isn't a time this understands.` : "  No time given.");
   }
   if (!ctx.schedule) throw new BuildStopped("Stopped before using any AI. To start the rest later, run the command again with --at <time>, like --at 23:30.");
   const s = ctx.schedule;
+  state.startAt = s.at.toISOString();
   const at = s.at.getTime() - clock.now();
   ctx.ask.say(`\nNow: ${now.map((x) => x.step).join(" and ")}, ${fmtByModel(now)}, then you review the rows.`);
   ctx.ask.say(`At ${fmtClock(s.at, new Date(clock.now()))} (in ${fmtWait(at)}): the rest, ${fmtByModel(later)}, on its own.`);
@@ -318,7 +346,7 @@ async function offerRulesAsNotes(ctx: BuildContext, recipe: Recipe, chunks: Chun
   for (const [path, cs] of bySource) {
     ctx.ask.say(`  • ${path}: ${cs.length} (${fmtApprox(cs.reduce((m, c) => m + tokens(c), 0))} tokens), such as "${(cs[0].title ?? "").slice(0, 70)}"`);
   }
-  const ok = await ctx.ask.confirm("File those with the notes instead, in the rows they're about, so they load only when a task needs them?", true);
+  const ok = await ctx.ask.confirm("File those with the notes instead, in the rows they're about, so they load only when a task needs them?", true, "rules-as-notes");
   if (!ok) return undefined;
   const asked = new Set(movable.map((c) => sectionOf(c)));
   return {

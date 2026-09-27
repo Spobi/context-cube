@@ -10,6 +10,7 @@ export const GENERIC_ID = "generic";
  */
 export const genericAdapter: AgentAdapter = {
   id: GENERIC_ID,
+  name: "your agent",
   capabilities: {
     hooks: false,
     blockEdits: false,
