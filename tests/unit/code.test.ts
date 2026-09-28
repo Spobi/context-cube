@@ -10,6 +10,9 @@ import { computeStatus } from "../../src/core/code/status";
 import { sessionNotice } from "../../src/core/code/notice";
 import { getBox, loadCube, readDrawer } from "../../src/core/cube";
 import { commitAll, FIXED_GIT_ENV, tempProject } from "../helpers";
+import { isCodeFile } from "../../src/core/code/search";
+import { loadBoxState, saveBoxState } from "../../src/core/state/state";
+import { linkedBoxes } from "../../src/core/update";
 import { spawnSync } from "node:child_process";
 
 async function project() {
@@ -60,6 +63,28 @@ describe("code links", () => {
     const z2 = readDrawer(getBox(loadCube(root), "Y01.X001")!, 2)!;
     expect(z2).toContain("Tidepool 1.0.8 (6): fix the clock");
     expect(commitsForKey([{ hash: "a", date: "", subject: "Tidepool 1.0.8 (10): other", files: [] }], "1.0.8 (1)")).toEqual([]);
+  });
+
+  it("leaves agents' settings out of code search, and out of what a commit's update plan names", async () => {
+    const root = tempProject({
+      "src/camera.swift": "func requestPermissions() {}\n",
+      ".claude/settings.json": '{ "permissions": { "allow": [] } }\n',
+      ".codex/hooks.json": '{ "hooks": {} }\n',
+      "config/app.json": '{ "permissions": true }\n',
+    });
+    await init({ cwd: root });
+    createBox(root, 3 - 1, { name: "camera-permissions", summary: "Asking for camera permissions.", readWhen: "Changing permissions prompts.", drawers: { 1: "- Ask for `permissions` before the first call.\n" } });
+    linkCode(root);
+    const files = (loadBoxState(root, "Y02.X001")?.code?.files ?? []).map((f) => f.path);
+    expect(files).toContain("config/app.json");
+    expect(files).not.toContain(".claude/settings.json");
+    expect(isCodeFile(".codex/hooks.json")).toBe(false);
+    expect(isCodeFile(".github/workflows/test.yml")).toBe(true);
+    // A cube linked before this change: the plan still ignores agent settings.
+    const st = loadBoxState(root, "Y02.X001")!;
+    saveBoxState(root, { ...st, code: { ...st.code!, files: [...st.code!.files, { ...st.code!.files[0], path: ".claude/settings.json" }] } });
+    expect(linkedBoxes(root, [".claude/settings.json"])).toEqual([]);
+    expect(linkedBoxes(root, ["config/app.json"]).map((b) => b.id)).toEqual(["Y02.X001"]);
   });
 
   it("writes a path rule for invariants with code, which loads for those files", async () => {

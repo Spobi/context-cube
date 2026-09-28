@@ -13,6 +13,7 @@ import { dialectFor, getAdapter } from "../adapters/registry";
 import type { HookDialect } from "../adapters/types";
 import { pathRulesFor, rulesForFile } from "../core/code/pathRules";
 import { bashReadFiles } from "../core/logs/extract";
+import { splitCommand } from "../core/logs/shell";
 
 /**
  * Hook behaviors beyond logging. Each checks its own feature flag, so one
@@ -62,15 +63,22 @@ export function protectedReason(root: string, file: string): string | undefined 
     const rec = box ? drawerRecord(root, cube, box, Number(d[3])) : undefined;
     if (rec) return `${recordRefusal(rec)}\nDon't edit its file directly.`;
   }
-  if (inner.startsWith(".state/")) return `${rel} is tool-owned bookkeeping. Change the cube with ${TOOL_COMMAND} commands (${TOOL_COMMAND} --help lists them).`;
-  if (inner.startsWith(".tool/")) return `${rel} is the tool itself. Update it by reinstalling Context Cube.`;
+  if (inner === ".state" || inner.startsWith(".state/")) return `${rel} is tool-owned bookkeeping. Change the cube with ${TOOL_COMMAND} commands (${TOOL_COMMAND} --help lists them).`;
+  if (inner === ".tool" || inner.startsWith(".tool/")) return `${rel} is the tool itself. Update it by reinstalling Context Cube.`;
   if (inner === "CUBE.md" || /\/ROW(-p\d+)?\.md$/.test(inner)) return `${rel} is generated. Change the boxes instead, then run: ${TOOL_COMMAND} index`;
   return undefined;
 }
 
-const PROTECTED_IN_BASH = /(context-cube\/(?:cube\.config\.json|\.state\/|\.tool\/)|Z1-invariants\.md)/;
-/** Commands that change the files they're given. */
+/** Protected paths in a shell command, the .state and .tool folders themselves included (`rm -rf context-cube/.state`). */
+const PROTECTED_IN_BASH = /(context-cube\/(?:cube\.config\.json|\.state(?:\/|(?=[\s'"]|$))|\.tool(?:\/|(?=[\s'"]|$)))|Z1-invariants\.md)/;
+/** Commands that change the files they're given, for a command too complex to parse: named anywhere in it. */
 const WRITER_VERBS = /\btee\b|\bsed\s+(-\w*\s+)*-i|\bperl\s+(-\w*\s+)*-i|\bmv\b|\brm\b|\btruncate\b|\bdd\b|\bln\b|\btouch\b|\bchmod\b|\binstall\s/;
+/** The same, as programs a parsed command runs. */
+const WRITERS = new Set(["tee", "mv", "rm", "rmdir", "unlink", "shred", "truncate", "dd", "ln", "touch", "chmod", "chown", "install"]);
+/** Programs that run the command after them. */
+const WRAPPERS = new Set(["sudo", "command", "builtin", "nice", "nohup", "time", "exec", "doas"]);
+/** xargs options that take a separate value. */
+const XARGS_VALUE = /^-[nILPsEd]$/;
 /** A script can write anything; it counts as a writer when its text looks like it writes. */
 const SCRIPTS = /\b(?:python3?|node|ruby|perl|php|deno|bun)\b/;
 const SCRIPT_WRITES = /open\([^)]*['"][wax+]|\.write\(|write_text|write_bytes|writeFile|appendFile|createWriteStream|rmSync|unlink|rename|rmtree|os\.remove|shutil\.|truncate|File\.write|IO\.write/;
@@ -122,7 +130,7 @@ export function protectedWrite(cmd: string): string | undefined {
   if (redirected) return redirected === "(" ? PROTECTED_IN_BASH.exec(cmd)?.[1] : PROTECTED_IN_BASH.exec(redirected)![1];
   const named = PROTECTED_IN_BASH.exec(cmd)?.[1];
   if (!named) return undefined;
-  if (WRITER_VERBS.test(cmd)) return named;
+  if (runsWriter(cmd)) return named;
   // `cp` changes only where it copies to: its last argument.
   for (const m of cmd.matchAll(/\bcp\b/g)) {
     const dest = commandWords(cmd.slice(m.index! + 2)).filter((w) => !w.startsWith("-")).pop();
@@ -130,6 +138,59 @@ export function protectedWrite(cmd: string): string | undefined {
   }
   if (SCRIPTS.test(cmd) && SCRIPT_WRITES.test(cmd)) return named;
   return undefined;
+}
+
+/**
+ * Does the command run a program that changes files (rm, mv, tee, sed -i, find
+ * -delete, …)? Judged where each command starts, so a path or search word like
+ * `.state/install` or `grep "rm"` doesn't count; inside `sh -c`, `xargs`, and
+ * `find -exec` too. A command too complex to parse (subshells, expansions,
+ * redirects to files) counts if a writer's name appears anywhere in it.
+ */
+export function runsWriter(cmd: string, depth = 0): boolean {
+  const parts = depth < 4 ? splitCommand(cmd) : undefined;
+  if (!parts) return WRITER_VERBS.test(cmd);
+  return parts.some((p) => writerCall(p.words, depth));
+}
+
+function writerCall(words: string[], depth: number): boolean {
+  let w = words;
+  for (;;) {
+    const b = baseName(w[0]);
+    if (WRAPPERS.has(b)) w = w.slice(1);
+    else if (b === "rtk" && w[1] === "proxy") w = w.slice(2);
+    else if (b === "env") {
+      w = w.slice(1);
+      while (w.length && (w[0].startsWith("-") || /^\w+=/.test(w[0]))) w = w.slice(1);
+    } else if (b === "xargs") {
+      w = w.slice(1);
+      while (w.length && w[0].startsWith("-")) w = w.slice(XARGS_VALUE.test(w[0]) ? 2 : 1);
+    } else if (/^\w+=/.test(w[0] ?? "")) w = w.slice(1);
+    else break;
+  }
+  if (!w.length) return false;
+  const b = baseName(w[0]);
+  if (WRITERS.has(b)) return true;
+  if ((b === "sed" || b === "gsed" || b === "perl") && w.slice(1).some((x) => /^-[a-zA-Z]*i/.test(x) || x.startsWith("--in-place"))) return true;
+  if (b === "sh" || b === "bash" || b === "zsh" || b === "dash") {
+    const c = w.findIndex((x, i) => i > 0 && /^-[a-z]*c[a-z]*$/.test(x));
+    if (c > 0 && w[c + 1] !== undefined) return runsWriter(w[c + 1], depth + 1);
+    return false;
+  }
+  if (b === "eval") return runsWriter(w.slice(1).join(" "), depth + 1);
+  if (b === "find") {
+    if (w.includes("-delete")) return true;
+    for (let i = 1; i < w.length; i++) {
+      if (!["-exec", "-execdir", "-ok", "-okdir"].includes(w[i])) continue;
+      const end = w.findIndex((x, j) => j > i && (x === ";" || x === "+"));
+      if (writerCall(w.slice(i + 1, end < 0 ? undefined : end), depth)) return true;
+    }
+  }
+  return false;
+}
+
+function baseName(word: string | undefined): string {
+  return (word ?? "").split("/").pop()!;
 }
 
 /** The shell words from here to the end of one simple command (an unquoted ; & | ) or newline), quotes removed. */

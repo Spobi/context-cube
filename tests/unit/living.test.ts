@@ -156,6 +156,34 @@ describe("the guard hook", () => {
     for (const command of writes) expect({ command, code: (await pre(root, "Bash", { command })).exitCode }).toEqual({ command, code: 2 });
   });
 
+  it("judges writers where commands start, so reads whose paths or search words look like one pass", async () => {
+    const root = await cubeProject();
+    const reads = [
+      // From a real session: `.state/install` isn't the install command.
+      'find context-cube/.state/install -type f | head -20; echo "---"; grep -rIl "/Users/someone" context-cube/.state context-cube/*.json context-cube/CUBE.md .claude/settings.json .codex 2>/dev/null | head -10',
+      'grep -rn "rm" context-cube/.state/boxes | head',
+      "ls context-cube/.tool/ && echo mv",
+      "find context-cube/.state -name '*.json' -exec cat {} +",
+      "cat context-cube/.state/aliases.txt | xargs -n 1 echo",
+    ];
+    for (const command of reads) expect({ command, code: (await pre(root, "Bash", { command })).exitCode }).toEqual({ command, code: 0 });
+    const writes = [
+      "find context-cube/.state -name '*.tmp' -delete",
+      "find context-cube/.state -type f -exec rm {} \\;",
+      "ls context-cube/.state/boxes | xargs -I {} rm {}",
+      "sudo rm context-cube/.state/retired.txt",
+      "env A=1 touch context-cube/.state/x",
+      'bash -c "mv context-cube/.state/aliases.txt /tmp/a"',
+      "install -m 644 /tmp/x context-cube/.state/x",
+      "echo ok; sed -i '' 's/a/b/' context-cube/.state/aliases.txt",
+      "rm -rf context-cube/.state",
+      "mv context-cube/.tool /tmp/t",
+      // Too complex to parse: a writer named anywhere still counts.
+      "echo $(rm context-cube/.state/retired.txt)",
+    ];
+    for (const command of writes) expect({ command, code: (await pre(root, "Bash", { command })).exitCode }).toEqual({ command, code: 2 });
+  });
+
   it("keeps the agent out of the archive, and makes putting an original back ask a person", async () => {
     const root = await cubeProject();
     const cat = await pre(root, "Bash", { command: "cat context-cube/.state/archive/HISTORY.md" });

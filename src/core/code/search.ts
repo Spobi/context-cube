@@ -24,8 +24,19 @@ export interface CodeIndex {
   bare: Map<string, string>;
 }
 
+/**
+ * Coding agents' own settings (hooks, permissions, rule files): configuration
+ * for the agent, not the project's code. A box about camera permissions isn't
+ * about .claude/settings.json's "permissions".
+ */
+const AGENT_CONFIG_RE = /(^|\/)\.(claude|codex|agents|cursor|windsurf)\//;
+
+export function isAgentConfig(path: string): boolean {
+  return AGENT_CONFIG_RE.test(path);
+}
+
 export function isCodeFile(path: string): boolean {
-  return CODE_EXT.test(path) && !isMarkdown(path);
+  return CODE_EXT.test(path) && !isMarkdown(path) && !isAgentConfig(path);
 }
 
 export function buildCodeIndex(root: string, files: string[] = listProjectFiles(root)): CodeIndex {

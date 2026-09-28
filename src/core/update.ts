@@ -8,6 +8,7 @@ import { openEntry } from "./history";
 import { loadRecipe } from "./build/recipe";
 import { CUBE_DIR } from "./paths";
 import { loadConfig } from "./config";
+import { isAgentConfig } from "./code/search";
 
 /**
  * Keeping the cube current (plan 8.1–8.2). The main session knows what changed
@@ -51,7 +52,8 @@ export function keyFromSubject(root: string, subject: string): string | undefine
 }
 
 export function linkedBoxes(root: string, files: string[]): Box[] {
-  const set = new Set(files);
+  // Agent settings aren't code; a cube built before they were left out of code search may still link to them.
+  const set = new Set(files.filter((f) => !isAgentConfig(f)));
   const cube = loadCube(root);
   return allBoxes(cube).filter((b) => {
     if (b.isRoot || getRow(cube, b.rowNum)?.type === "history") return false;

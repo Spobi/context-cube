@@ -2,6 +2,11 @@
 
 To update a project, run `npx context-cube@latest` in it, then commit `context-cube/` so teammates get the same version.
 
+## 0.3.2 (2026-09-27)
+
+- **The guard judges writers where commands start.** It looked for the name of a writing command (`rm`, `mv`, `install`, …) anywhere in a command that named a protected path, so `find context-cube/.state/install …` (a folder named `install`) or `grep "rm" context-cube/.state` was blocked as a write. Now it checks the program each command runs, including inside `sh -c`, `xargs`, and `find -exec`, and counts `find -delete`. A command too complex to read (a subshell, say) is still judged the old way. The guard also now covers the `.state` and `.tool` folders named without a trailing slash (`rm -rf context-cube/.state` got through before).
+- **Code search leaves agents' settings out.** `.claude/`, `.codex/`, `.agents/` and the like hold agent configuration, not project code, but a box could be linked to `.claude/settings.json` by a word like "permissions", and then every commit that changed the settings named that box in its update plan. Running setup again (or `cube links`) re-links an existing cube without them; until then, update plans ignore them.
+
 ## 0.3.1 (2026-09-27)
 
 - **Running setup again offers the rule rewrites a build couldn't ask about.** A build run without a terminal and without `--yes` archived the original files but left rules like "Update `HISTORY.md`" as they were, so agents got that rule and a placeholder in `HISTORY.md` saying to add to the cube instead. Now updating an existing cube finds rules that still point at archived files and offers to rewrite them to point at the cube (the original words are kept, no longer loaded). It needs your yes, as before.
