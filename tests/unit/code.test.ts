@@ -12,7 +12,7 @@ import { getBox, loadCube, readDrawer } from "../../src/core/cube";
 import { commitAll, FIXED_GIT_ENV, tempProject } from "../helpers";
 import { isCodeFile } from "../../src/core/code/search";
 import { loadBoxState, saveBoxState } from "../../src/core/state/state";
-import { linkedBoxes } from "../../src/core/update";
+import { lastCommit, linkedBoxes } from "../../src/core/update";
 import { spawnSync } from "node:child_process";
 
 async function project() {
@@ -123,7 +123,11 @@ describe("staleness", () => {
     const root = await project();
     writeFileSync(join(root, "src/call/ring.swift"), "struct RingProbe { let deadline: Int; let extra = 1 }\n");
     const out = (await status({ cwd: root })) as string[];
-    expect(out.join("\n")).toContain("Y02.X001 sixty-second-clock: src/call/ring.swift changed");
+    expect(out.join("\n")).toContain("Y02.X001 sixty-second-clock: src/call/ring.swift changed near `RingProbe`");
+    // Looking changes nothing (agents are told to run it); --mark writes it into the header.
+    expect(getBox(loadCube(root), "Y02.X001")!.header!.status).toBe("ok");
+    expect(spawnSync("git", ["status", "--porcelain", "context-cube", ".claude"], { cwd: root, encoding: "utf8" }).stdout).toBe("");
+    await status({ cwd: root, mark: true });
     expect(getBox(loadCube(root), "Y02.X001")!.header!.status).toBe("stale");
     // History boxes describe the past and are never marked.
     expect(getBox(loadCube(root), "Y01.X001")!.header!.status).toBe("ok");
@@ -133,13 +137,47 @@ describe("staleness", () => {
     expect(computeStatus(root)).toEqual([]);
   });
 
+  it("only a change near what a box mentions makes it stale, for status and for a commit's update plan", async () => {
+    const root = await project();
+    const clock = (endTime: string, other: string) =>
+      ["final class CallClock {", "  func endTime() -> Date {", `    let a = ${endTime}`, "    return Date()", "  }", "", "  func unrelated() {", "    let b = 1", "    let c = 2", "    let d = 3", "    let e = 4", `    let f = ${other}`, "  }", "}", ""].join("\n");
+    writeFileSync(join(root, "src/call/clock.swift"), clock("1", "5"));
+    commitAll(root, "longer clock");
+    await ok(["Y02.X001"], { cwd: root });
+    commitAll(root, "checked");
+    // An edit inside another function: nothing it says changed.
+    writeFileSync(join(root, "src/call/clock.swift"), clock("1", "50"));
+    expect(computeStatus(root)).toEqual([]);
+    commitAll(root, "tweak unrelated");
+    expect(linkedBoxes(root, ["src/call/clock.swift"], lastCommit(root)!.hash)).toEqual([]);
+    // Without the commit to look at, any change to a linked file counts.
+    expect(linkedBoxes(root, ["src/call/clock.swift"]).map((b) => b.id)).toEqual(["Y02.X001"]);
+    // An edit inside `endTime`, which the box names.
+    writeFileSync(join(root, "src/call/clock.swift"), clock("2", "50"));
+    expect(computeStatus(root).map((r) => r.reasons)).toEqual([["src/call/clock.swift changed near `CallClock`, `endTime`"]]);
+    commitAll(root, "change endTime");
+    expect(linkedBoxes(root, ["src/call/clock.swift"], lastCommit(root)!.hash).map((b) => b.id)).toEqual(["Y02.X001"]);
+  });
+
+  it("--mark sets boxes back to ok when what made them stale is undone", async () => {
+    const root = await project();
+    const ring = join(root, "src/call/ring.swift");
+    const before = readFileSync(ring, "utf8");
+    writeFileSync(ring, "struct RingProbe { let deadline: Int; let extra = 1 }\n");
+    await status({ cwd: root, mark: true });
+    expect(getBox(loadCube(root), "Y02.X001")!.header!.status).toBe("stale");
+    writeFileSync(ring, before);
+    expect(await status({ cwd: root, mark: true })).toEqual(["Every box matches its code.", "Set 1 box back to ok."]);
+    expect(getBox(loadCube(root), "Y02.X001")!.header!.status).toBe("ok");
+  });
+
   it("a deleted code name mentioned in an invariant is flagged for review", async () => {
     const root = await project();
     writeFileSync(join(root, "src/call/clock.swift"), "final class Clock {\n  func endTime() -> Date { Date() }\n}\n");
     const results = computeStatus(root);
     expect(results).toContainEqual(expect.objectContaining({ id: "Y02.X001", status: "needs-review" }));
     expect(results[0].reasons).toContain("`CallClock` is no longer in the code");
-    await status({ cwd: root });
+    await status({ cwd: root, mark: true });
     expect(getBox(loadCube(root), "Y02.X001")!.header!.status).toBe("needs-review");
   });
 
@@ -155,7 +193,7 @@ describe("staleness", () => {
     writeFileSync(join(root, "src/call/ring.swift"), "struct RingProbe { let deadline: Int; let x = 2 }\n");
     const notice = sessionNotice(root)!;
     expect(notice).toContain("Context Cube: 1 box linked to recent work may be out of date:");
-    expect(notice).toContain("- Y02.X001 sixty-second-clock (stale: src/call/ring.swift changed)");
+    expect(notice).toContain("- Y02.X001 sixty-second-clock (stale: src/call/ring.swift changed near `RingProbe`)");
     // The notice never edits the cube.
     expect(getBox(loadCube(root), "Y02.X001")!.header!.status).toBe("ok");
     expect(existsSync(join(root, "context-cube"))).toBe(true);

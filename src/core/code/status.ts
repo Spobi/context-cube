@@ -1,13 +1,14 @@
-import { allBoxes, getBox, getRow, loadCube, type Box, type Cube } from "../cube";
+import { allBoxes, getRow, loadCube, type Box, type Cube } from "../cube";
 import { loadBoxState } from "../state/state";
-import { buildCodeIndex, filesWithName, fingerprint, type CodeIndex } from "./search";
+import { buildCodeIndex, filesWithName, fingerprint, isPlainWord, type CodeIndex } from "./search";
+import { Changes } from "./changes";
 import { bulkUpdateHeaders } from "../ops";
 import { git, gitRoot } from "../git";
 
 /**
- * Staleness (plan 8.4). A box is `stale` when a file in its Z2 changed since
- * the box was last updated (fingerprints; no tokens). A box in an invariants,
- * feature, system, catalog, custom, or rules row is `needs-review` when a code
+ * Staleness (plan 8.4). A box is `stale` when a file in its Z2 changed near
+ * the code it mentions since the box was last checked (fingerprints, and git
+ * for where the change was; no tokens). A box is `needs-review` when a code
  * name it mentions no longer exists in the code. History boxes are exempt:
  * they describe the past.
  */
@@ -23,6 +24,7 @@ export interface BoxStatus {
 export function computeStatus(root: string, opts: { onlyFiles?: Set<string>; cube?: Cube; index?: CodeIndex } = {}): BoxStatus[] {
   const cube = opts.cube ?? loadCube(root);
   let idx = opts.index;
+  const changes = new Changes(root);
   const out: BoxStatus[] = [];
   for (const box of allBoxes(cube)) {
     if (box.isRoot) continue;
@@ -40,7 +42,10 @@ export function computeStatus(root: string, opts: { onlyFiles?: Set<string>; cub
         reasons.push(`${f} was deleted`);
         changed.push(f);
       } else if (fps[f] && now !== fps[f]) {
-        reasons.push(`${f} changed`);
+        // A change elsewhere in the file doesn't make the box wrong.
+        const near = changes.near(f, fps[f], st?.names ?? []);
+        if (near && !near.length) continue;
+        reasons.push(near ? `${f} changed near ${near.slice(0, 3).map((n) => `\`${n}\``).join(", ")}` : `${f} changed`);
         changed.push(f);
       }
     }
@@ -48,7 +53,8 @@ export function computeStatus(root: string, opts: { onlyFiles?: Set<string>; cub
     if (st?.names?.length) {
       idx ??= buildCodeIndex(root);
       // Comments count here: a name that's gone from the code is gone from its comments too.
-      missing = st.names.filter((n) => filesWithName(idx!, n, 1, { raw: true }).length === 0);
+      // A plain word ("probe") that's gone says little: it may only ever have been prose.
+      missing = st.names.filter((n) => !isPlainWord(n) && filesWithName(idx!, n, 1, { raw: true }).length === 0);
       for (const n of missing) reasons.push(`\`${n}\` is no longer in the code`);
     }
     if (!reasons.length) continue;
@@ -57,22 +63,29 @@ export function computeStatus(root: string, opts: { onlyFiles?: Set<string>; cub
   return out;
 }
 
-/** Writes stale / needs-review into the headers of the boxes found. Returns how many changed. */
+/**
+ * Writes stale / needs-review into the headers of the boxes found, and sets
+ * boxes marked before that aren't found any more back to ok. Returns how many
+ * changed.
+ */
 export function applyStatus(root: string, results: BoxStatus[]): number {
   const cube = loadCube(root);
-  let n = 0;
-  const updates = new Map<string, { status: BoxStatus["status"] }>();
-  for (const r of results) {
-    const box = getBox(cube, r.id);
-    if (!box?.header) continue;
-    // needs-review outranks stale; pending, open, and superseded are left alone.
-    const cur = box.header.status;
-    if (cur === "pending" || cur === "open" || cur === "superseded" || cur === r.status || (cur === "needs-review" && r.status === "stale")) continue;
-    updates.set(box.id, { status: r.status });
-    n++;
+  const found = new Map(results.map((r) => [r.id, r.status]));
+  const updates = new Map<string, { status: BoxStatus["status"] | "ok" }>();
+  for (const box of allBoxes(cube)) {
+    const cur = box.header?.status;
+    // pending, open, and superseded are left alone.
+    if (!cur || cur === "pending" || cur === "open" || cur === "superseded") continue;
+    const now = found.get(box.id);
+    if (!now) {
+      if (cur === "stale" || cur === "needs-review") updates.set(box.id, { status: "ok" });
+    } else if (cur !== now && !(cur === "needs-review" && now === "stale")) {
+      // needs-review outranks stale.
+      updates.set(box.id, { status: now });
+    }
   }
   if (updates.size) setStatuses(root, updates);
-  return n;
+  return updates.size;
 }
 
 export function setStatuses(root: string, updates: Map<string, { status: "ok" | "stale" | "needs-review" | "pending" | "open" }>): void {

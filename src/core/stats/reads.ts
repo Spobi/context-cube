@@ -140,14 +140,13 @@ export function computeStats(
     const touchedRows = new Set<Row>();
     const touchedBoxes = new Set<Box>();
     const indexRead = new Map<Row, Set<string>>();
-    const filesRead = new Set<string>();
-    const rulesLoaded = new Set<string>();
+    /** When each cube file was first opened. */
+    const firstOpened = new Map<string, string>();
     const boxFirst = new Map<Box, string>();
     const boxTokensRead = new Map<Box, number>();
     for (const r of rs) {
       if (r.tool === "Instructions") {
         read += r.tokens; // CLAUDE.md with the always-loaded block, rule files: all counted
-        if (r.loadReason === "path_glob_match") rulesLoaded.add(r.file);
         continue;
       }
       const c = classify(cube, r.file);
@@ -156,7 +155,7 @@ export function computeStats(
         continue;
       }
       read += r.tokens; // cube files: every read, repeats included
-      filesRead.add(r.file);
+      if (!firstOpened.has(r.file) || r.t < firstOpened.get(r.file)!) firstOpened.set(r.file, r.t);
       if (c.kind === "index") {
         touchedRows.add(c.row!);
         indexRead.set(c.row!, new Set([...(indexRead.get(c.row!) ?? []), join(root, r.file)]));
@@ -179,15 +178,20 @@ export function computeStats(
       for (const p of indexPages(row)) upper += fileTokens(p, cpt);
       for (const b of row.allBoxes) for (const d of b.drawers) upper += fileTokens(d.path, cpt);
     }
-    // Possible misses: an edited file that invariants clearly govern, where the agent
-    // neither opened their Z1 nor had their path rule load.
+    // Possible misses: an edited file that invariants govern, where the agent hadn't opened
+    // their Z1 before its first edit there. A path rule loading doesn't count: it's a
+    // one-line pointer that loads whenever the file is read, and a file is read before it's edited.
     const misses: Miss[] = [];
-    for (const e of editsBySession.get(session) ?? []) {
-      const governing = (governs.get(e.file) ?? []).filter((g) => g.score >= STRONG);
-      const unseen = governing.filter((g) => !filesRead.has(`${CUBE_DIR}/${g.inv.relDir}/Z1-invariants.md`) && !rulesLoaded.has(`.claude/rules/cube-${g.inv.id.replace(".", "-")}.md`));
-      if (!unseen.length) continue;
-      const box = governing.flatMap((g) => g.via)[0] ?? governing[0].inv.id;
-      if (!misses.some((m) => m.file === e.file)) misses.push({ file: e.file, box, invariants: unseen.map((g) => g.inv.id) });
+    const firstEdit = new Map<string, string>();
+    for (const e of editsBySession.get(session) ?? []) if (!firstEdit.has(e.file) || e.t < firstEdit.get(e.file)!) firstEdit.set(e.file, e.t);
+    for (const [file, t] of firstEdit) {
+      const governing = governs.get(file) ?? [];
+      const unread = governing.filter((g) => {
+        const at = firstOpened.get(`${CUBE_DIR}/${g.inv.relDir}/Z1-invariants.md`);
+        return !at || at > t;
+      });
+      if (!unread.length) continue;
+      misses.push({ file, box: unread.flatMap((g) => g.via)[0] ?? unread[0].inv.id, invariants: unread.map((g) => g.inv.id) });
     }
     // Reach: boxes opened, by the age of what they hold.
     for (const b of touchedBoxes) {
@@ -310,7 +314,7 @@ export function renderStats(r: StatsReport, opts: { all?: boolean } = {}): strin
     out.push(`  Reach (boxes opened, by the age of what they hold): under 30 days ${r.reach.under30}, 30–90 days ${r.reach.days30to90}, over 90 days ${r.reach.over90}${r.reach.undated ? `, undated ${r.reach.undated}` : ""}`);
   }
   if (r.before) out.push(`  Measured before the cube: ${fmtInt(r.before.medianMemoryTokens)} tokens per session read from memory files (median of ${r.before.sessions} session${r.before.sessions === 1 ? "" : "s"})`);
-  out.push(`All figures are estimates (characters ÷ ${r.charsPerToken}). "Without the cube" is what reading the same areas in full would have taken. "Possibly unused" means nothing the box names came up again after it was opened; it's a rough signal.`);
+  out.push(`All figures are estimates (characters ÷ ${r.charsPerToken}). A possible miss is a file edited before the invariants that govern it were opened (the one-line rule that loads with the file doesn't count). "Without the cube" is what reading the same areas in full would have taken. "Possibly unused" means nothing the box names came up again after it was opened; it's a rough signal.`);
   return out.join("\n");
 }
 

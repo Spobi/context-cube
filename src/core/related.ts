@@ -102,6 +102,7 @@ export function related(root: string, query: string, cwd = process.cwd(), cube: 
     return (state.get(b.id)?.names ?? []).includes(query) ? `names \`${query}\`` : undefined;
   };
 
+  const namesCode = (i: Box) => (state.get(i.id)?.code?.files ?? []).some((f) => linkStrength(f.why) >= STRONG);
   const why = new Map<string, string[]>();
   // How clearly each box or invariant is tied to the query (see code/governs.ts).
   const strength = new Map<string, number>();
@@ -136,9 +137,11 @@ export function related(root: string, query: string, cwd = process.cwd(), cube: 
     stronger(b.id, s);
     if (row.type === "invariants") (isCandidate(b) ? cand : inv).set(b.id, b);
     else about.push(b);
-    // A box only passes its invariants on when it clearly covers the file and is still current.
+    // A box only passes its invariants on when it clearly covers the file and is still current,
+    // and only those whose own text names no code (as path rules do; see code/governs.ts).
     if (row.type === "invariants" || s < STRONG || b.header?.status === "superseded") continue;
     for (const i of invariantsFor(cube, b)) {
+      if (namesCode(i)) continue;
       inv.set(i.id, i);
       stronger(i.id, STRONG);
       because(i.id, `via ${b.id}`);

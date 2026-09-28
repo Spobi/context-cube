@@ -9,6 +9,7 @@ import { loadRecipe } from "./build/recipe";
 import { CUBE_DIR } from "./paths";
 import { loadConfig } from "./config";
 import { isAgentConfig } from "./code/search";
+import { Changes } from "./code/changes";
 
 /**
  * Keeping the cube current (plan 8.1–8.2). The main session knows what changed
@@ -51,21 +52,31 @@ export function keyFromSubject(root: string, subject: string): string | undefine
   return m?.[1];
 }
 
-export function linkedBoxes(root: string, files: string[]): Box[] {
+/**
+ * Boxes linked to changed files. Given the commit, only boxes whose code the
+ * commit changed near (see code/changes.ts): a new button in a big file isn't
+ * a reason to check every box that mentions something else in it.
+ */
+export function linkedBoxes(root: string, files: string[], commit?: string): Box[] {
   // Agent settings aren't code; a cube built before they were left out of code search may still link to them.
   const set = new Set(files.filter((f) => !isAgentConfig(f)));
   const cube = loadCube(root);
+  const changes = new Changes(root);
   return allBoxes(cube).filter((b) => {
     if (b.isRoot || getRow(cube, b.rowNum)?.type === "history") return false;
-    const code = loadBoxState(root, b.id)?.code?.files ?? [];
-    return code.some((f) => set.has(f.path));
+    const st = loadBoxState(root, b.id);
+    return (st?.code?.files ?? []).some((f) => {
+      if (!set.has(f.path)) return false;
+      const near = commit ? changes.nearInCommit(f.path, commit, st?.names ?? []) : undefined;
+      return !near || near.length > 0;
+    });
   });
 }
 
 export function updatePlan(root: string, opts: { commit?: CommitInfo; files?: string[]; reason?: string; helper?: string } = {}): string {
   const cube = loadCube(root);
   const files = opts.commit?.files ?? opts.files ?? [];
-  const linked = linkedBoxes(root, files);
+  const linked = linkedBoxes(root, files, opts.commit?.hash);
   const open = openEntry(cube);
   const unit = (() => {
     try {

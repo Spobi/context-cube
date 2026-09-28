@@ -57,18 +57,26 @@ describe("stats: what was read", () => {
     expect(text).not.toMatch(/saving/i);
   });
 
-  it("doesn't count a miss when the path rule loaded or the invariant was opened", async () => {
+  it("counts a miss unless the invariant itself was opened before the file's first edit", async () => {
     const root = await smallCube({ "CLAUDE.md": "# Demo\n", "src/handshake.ts": "export function clockHandshake() {}\n" });
     writeDrawer(root, "Y03.X001", 4, "Runs `clockHandshake`.\n");
     linkCode(root);
     await reindex(root);
     const t = "2099-01-01T10:00:00.000Z";
-    const edits = [{ t, session: "s1", tool: "Edit", file: "src/handshake.ts" }];
+    const later = "2099-01-01T10:05:00.000Z";
+    const edits = [
+      { t, session: "s1", tool: "Edit", file: "src/handshake.ts" },
+      { t: later, session: "s1", tool: "Edit", file: "src/handshake.ts" },
+    ];
+    const missed = (reads: ReadRecord[]) => computeStats(root, { reads, edits }).sessions[0].misses.map((m) => m.invariants);
+    // The path rule loads whenever the file is read, and a file is read before it's edited: only a pointer.
     const ruleLoaded: ReadRecord = { t, session: "s1", tool: "Instructions", file: ".claude/rules/cube-Y02-X001.md", chars: 400, tokens: 100, loadReason: "path_glob_match" };
-    expect(computeStats(root, { reads: [ruleLoaded], edits }).sessions[0].misses).toEqual([]);
-    const cube = loadCube(root);
-    const opened: ReadRecord = { t, session: "s1", tool: "Read", file: `context-cube/${getBox(cube, "Y02.X001")!.relDir}/Z1-invariants.md`, chars: 40, tokens: 10 };
-    expect(computeStats(root, { reads: [opened], edits }).sessions[0].misses).toEqual([]);
+    expect(missed([ruleLoaded])).toEqual([["Y02.X001"]]);
+    const z1 = `context-cube/${getBox(loadCube(root), "Y02.X001")!.relDir}/Z1-invariants.md`;
+    const opened = (at: string): ReadRecord => ({ t: at, session: "s1", tool: "Read", file: z1, chars: 40, tokens: 10 });
+    expect(missed([ruleLoaded, opened("2099-01-01T09:59:00.000Z")])).toEqual([]);
+    // Opened only after the first edit: still a miss.
+    expect(missed([ruleLoaded, opened("2099-01-01T10:01:00.000Z")])).toEqual([["Y02.X001"]]);
   });
 
   it("reports memory-file reads from before the cube separately", async () => {

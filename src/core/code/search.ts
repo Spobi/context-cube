@@ -137,7 +137,7 @@ export function isPlainWord(name: string): boolean {
   return /^(?:[a-z]+|[A-Z][a-z]+)$/.test(name);
 }
 
-const DECLARE = "(?:func|case|let|var|class|struct|enum|protocol|extension|typealias|actor|def|function|const|type|interface|val|fun|fn|module|table|column|property|static|export)";
+export const DECLARE = "(?:func|case|let|var|class|struct|enum|protocol|extension|typealias|actor|def|function|const|type|interface|val|fun|fn|module|table|column|property|static|export)";
 
 /**
  * Whether a file clearly uses `name` as code: declares it, calls or labels it,
@@ -148,6 +148,11 @@ export function usesAsCode(idx: CodeIndex, file: string, name: string): boolean 
   const n = escape(name);
   if (new RegExp(`\\b${DECLARE}\\s+${n}\\b|[.]${n}\\b|\\b${n}\\s*[(:]`).test(bareText(idx, file))) return true;
   return new RegExp(`["'\`]${n}["'\`]`).test(idx.text.get(file) ?? "");
+}
+
+/** Whether a file declares `name` (`struct AppInfo`, `func verifyEcho`, `const peerCaps`). */
+export function declares(idx: CodeIndex, file: string, name: string): boolean {
+  return new RegExp(`\\b${DECLARE}\\s+${escape(name)}\\b`).test(bareText(idx, file));
 }
 
 /**
@@ -166,12 +171,17 @@ export function filesWithName(idx: CodeIndex, name: string, limit = 50, opts: { 
   return out;
 }
 
-/** The first line in `file` where `name` appears, for a one-line reason. */
-export function lineWith(idx: CodeIndex, file: string, name: string): number | undefined {
+/** The first line in `file` where `name` appears (or, with `declared`, where it's declared), for a one-line reason. */
+export function lineWith(idx: CodeIndex, file: string, name: string, opts: { declared?: boolean } = {}): number | undefined {
   const text = idx.text.get(file);
   if (!text) return undefined;
-  const re = new RegExp(`(?<![\\w$])${escape(name)}(?![\\w$])`);
   const lines = text.split("\n");
+  if (opts.declared) {
+    const decl = new RegExp(`\\b${DECLARE}\\s+${escape(name)}\\b`);
+    const i = bareText(idx, file).split("\n").findIndex((l) => decl.test(l));
+    if (i >= 0) return i + 1;
+  }
+  const re = new RegExp(`(?<![\\w$])${escape(name)}(?![\\w$])`);
   const i = lines.findIndex((l) => re.test(l));
   return i >= 0 ? i + 1 : undefined;
 }

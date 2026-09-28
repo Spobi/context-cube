@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { buildCodeIndex, codeOnly, filesWithName, usesAsCode } from "../../src/core/code/search";
 import { linkCode, linkText } from "../../src/core/code/links";
-import { linkStrength } from "../../src/core/code/governs";
+import { governingByFile, linkStrength, MAX_GOVERNED } from "../../src/core/code/governs";
 import { pathRulesFor } from "../../src/core/code/pathRules";
 import { computeStatus } from "../../src/core/code/status";
 import { getBox, loadCube } from "../../src/core/cube";
@@ -14,6 +14,7 @@ import { runChecks } from "../../src/core/check/check";
 import { supersede } from "../../src/commands/living";
 import { ruleRewrites } from "../../src/setup/originals";
 import { smallCube } from "../fixtures/build";
+import { tempProject } from "../helpers";
 
 const swift = [
   "import CallKit",
@@ -81,6 +82,42 @@ describe("how clearly a box is tied to a file", () => {
     expect(linkStrength("`clockHandshake` (line 7)")).toBe(2);
     expect(linkStrength("`decline` (line 3)")).toBe(1);
     expect(linkStrength("`a1` (line 1), `b_c` (line 2), `d` (line 3), `e` (line 4), and 3 more")).toBe(4 + 1 + 1 + 3);
+    // A specific name only used in the file (it's defined elsewhere) counts like a plain word.
+    expect(linkStrength("`AppInfo` (used at line 53)")).toBe(1);
+  });
+
+  it("links a shared name only where it's defined, and a name defined elsewhere counts less", () => {
+    const root = tempProject({
+      "src/AppInfo.swift": "struct AppInfo { static let version = 1 }\n",
+      "src/a.swift": "let v = AppInfo.version\n",
+      "src/b.swift": "let v = AppInfo.version\n",
+      "src/c.swift": "let v = AppInfo.version\n",
+      "src/Deadline.swift": "func pinDeadline() {}\n",
+      "src/Timer.swift": "let x = pinDeadline()\n",
+    });
+    const { files } = linkText(buildCodeIndex(root), "Reads `AppInfo` and calls `pinDeadline`.");
+    expect(files).toEqual([
+      { path: "src/AppInfo.swift", why: "`AppInfo` (line 1)" },
+      { path: "src/Deadline.swift", why: "`pinDeadline` (line 1)" },
+      { path: "src/Timer.swift", why: "`pinDeadline` (used at line 1)" },
+    ]);
+  });
+
+  it("an invariant governs what its own text points to, the clearest few, and borrows only when it names no code", async () => {
+    const handlers = Object.fromEntries(Array.from({ length: MAX_GOVERNED + 2 }, (_, i) => [`src/h${i}.ts`, `export function handlerNumber${i}() {}\n`]));
+    const root = await smallCube({ "CLAUDE.md": "# Demo\n", "src/handshake.ts": "export function clockHandshake() {}\n", "src/deadline.ts": "export const callDeadline = 60;\n", ...handlers });
+    // Y02.X001 names no code, so it borrows the file of the box that links to it.
+    writeDrawer(root, "Y03.X001", 4, "Runs `clockHandshake`.\n");
+    createBox(root, 2, { name: "deadline-pinned", summary: "The deadline is pinned once.", readWhen: "Changing the deadline.", drawers: { 1: "- `callDeadline` is pinned once per call.\n" }, writtenBy: "migrated" });
+    // This box covers the handshake file too, but its invariant names its own code.
+    createBox(root, 3, { name: "countdown", summary: "The countdown.", readWhen: "Changing the countdown.", links: [{ to: "Y02.X002", rel: "governed-by" }], drawers: { 4: "Starts from `clockHandshake`.\n" }, writtenBy: "migrated" });
+    const names = Object.keys(handlers).map((_, i) => `\`handlerNumber${i}\``).join(", ");
+    createBox(root, 2, { name: "handlers", summary: "Handlers never throw.", readWhen: "Changing a handler.", drawers: { 1: `- ${names} never throw.\n` }, writtenBy: "migrated" });
+    linkCode(root);
+    const g = governingByFile(loadCube(root));
+    expect(g.get("src/handshake.ts")!.map((x) => x.inv.id)).toEqual(["Y02.X001"]);
+    expect(g.get("src/deadline.ts")!.map((x) => x.inv.id)).toEqual(["Y02.X002"]);
+    expect([...g.values()].filter((l) => l.some((x) => x.inv.id === "Y02.X003"))).toHaveLength(MAX_GOVERNED);
   });
 
   it("related ranks invariants, and lists weak links apart", async () => {

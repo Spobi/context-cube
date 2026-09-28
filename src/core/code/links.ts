@@ -6,7 +6,8 @@ import { splitGenerated } from "../format/generated";
 import { parseDoc } from "../format/header";
 import { git, gitRoot } from "../git";
 import { loadBoxState, newBoxState, saveBoxState, type BoxState } from "../state/state";
-import { buildCodeIndex, filesWithName, fingerprint, isPlainWord, lineWith, usesAsCode, type CodeIndex } from "./search";
+import { buildCodeIndex, declares, filesWithName, fingerprint, isPlainWord, lineWith, usesAsCode, type CodeIndex } from "./search";
+import { linkStrength } from "./governs";
 import { FROM_RE } from "../build/place";
 
 /**
@@ -55,9 +56,20 @@ export function boxText(box: Box): string {
   return parts.join("\n");
 }
 
+/** A name in more files than this is too common to link by. */
 const MAX_NAME_FILES = 8;
+/** A name in this many files or fewer belongs to them; in more, it's shared (a type used across the app, say). */
+const OWN_FILES = 3;
 const MAX_FILES = 25;
 
+/**
+ * The files a text's paths and code names point to. A name counts fully in
+ * the file that defines it (`struct AppInfo`, `func verifyEcho`) or in the only
+ * file that has it; elsewhere it's "used at" and counts less, so one mention of
+ * a type or a platform API (`timeoutInterval`) doesn't tie a box to every file
+ * that uses it. A name in more than a few files links only where it's defined,
+ * and otherwise just adds weight to files linked some other way.
+ */
 export function linkText(idx: CodeIndex, text: string): { files: CodeFileRef[]; names: string[] } {
   const found = mentions(text);
   const why = new Map<string, string[]>();
@@ -66,6 +78,12 @@ export function linkText(idx: CodeIndex, text: string): { files: CodeFileRef[]; 
     if (!list.includes(reason)) list.push(reason);
     why.set(path, list);
   };
+  const reason = (f: string, n: string, own: boolean) => {
+    const line = lineWith(idx, f, n, { declared: own });
+    // A plain word counts little anyway; a specific name defined elsewhere is marked, so it counts less here.
+    if (!own && !isPlainWord(n)) return `\`${n}\` (used${line ? ` at line ${line}` : ""})`;
+    return `\`${n}\`${line ? ` (line ${line})` : ""}`;
+  };
   for (const p of found.paths) {
     const clean = p.replace(/^\.\//, "");
     const exact = idx.fileSet.has(clean) ? [clean] : [...idx.fileSet].filter((f) => f.endsWith(`/${clean}`));
@@ -73,21 +91,31 @@ export function linkText(idx: CodeIndex, text: string): { files: CodeFileRef[]; 
     if (matches.length && matches.length <= 3) for (const m of matches) add(m, "named in the text");
   }
   const names: string[] = [];
+  const shared: { n: string; files: string[] }[] = [];
   for (const n of found.names) {
     let files = filesWithName(idx, n, MAX_NAME_FILES + 1);
     if (!files.length || files.length > MAX_NAME_FILES) continue;
     if (isPlainWord(n)) files = files.filter((f) => usesAsCode(idx, f, n));
     if (!files.length) continue;
     names.push(n);
-    for (const f of files.slice(0, 3)) {
-      const line = lineWith(idx, f, n);
-      add(f, `\`${n}\`${line ? ` (line ${line})` : ""}`);
+    if (files.length > OWN_FILES) {
+      shared.push({ n, files });
+      continue;
+    }
+    for (const f of files) add(f, reason(f, n, files.length === 1 || declares(idx, f, n)));
+  }
+  for (const { n, files } of shared) {
+    const home = isPlainWord(n) ? [] : files.filter((f) => declares(idx, f, n));
+    for (const f of files) {
+      const own = home.length <= 2 && home.includes(f);
+      if (own || why.has(f)) add(f, reason(f, n, own));
     }
   }
   const files = [...why.entries()]
-    .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
+    .map(([path, reasons]) => ({ path, reasons, strength: linkStrength(reasons.join(", ")) }))
+    .sort((a, b) => b.strength - a.strength || a.path.localeCompare(b.path))
     .slice(0, MAX_FILES)
-    .map(([path, reasons]) => ({ path, why: reasons.slice(0, 4).join(", ") + (reasons.length > 4 ? `, and ${reasons.length - 4} more` : "") }));
+    .map(({ path, reasons }) => ({ path, why: reasons.slice(0, 4).join(", ") + (reasons.length > 4 ? `, and ${reasons.length - 4} more` : "") }));
   return { files, names };
 }
 

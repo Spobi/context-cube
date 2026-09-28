@@ -324,7 +324,7 @@ async function updateExisting(root: string, ask: Asker, opts: SetupOptions, pf: 
   const cube = loadCube(root);
   return [
     ...(tool.updatedFrom ? [`Updated the project's copy of Context Cube from ${tool.updatedFrom} to ${version()}. Commit context-cube/ so teammates get it too.`] : []),
-    `Updated: ${cube.rows.length} rows, ${allBoxes(cube).filter((b) => !b.isRoot).length} boxes${marked ? `; ${marked} box${marked === 1 ? " is" : "es are"} now marked stale or needs-review (see: ${TOOL_COMMAND} status)` : ""}.`,
+    `Updated: ${cube.rows.length} rows, ${allBoxes(cube).filter((b) => !b.isRoot).length} boxes${marked ? `; updated the stale or needs-review marks on ${marked} box${marked === 1 ? "" : "es"} (see: ${TOOL_COMMAND} status)` : ""}.`,
     ...(rewrote ? [`Rewrote ${rewrote} rule${rewrote === 1 ? "" : "s"} to point at the cube (the original words are kept, no longer loaded).`] : []),
     "Hooks, path rules, and the always-loaded block are current.",
     ...(addCodex ? installed.filter((l) => l.startsWith("codex:") || l.startsWith("  Codex")) : []),

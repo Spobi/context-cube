@@ -275,9 +275,10 @@ export function buildProgram(): Command {
 
   program
     .command("status")
-    .description("Find boxes whose code changed (stale) or whose code names are gone (needs review). No AI.")
+    .description("Find boxes whose code changed near what they mention (stale) or whose code names are gone (needs review). No AI; changes nothing.")
     .option("--json", "print results as JSON")
-    .option("--no-write", "report only; don't mark boxes")
+    .option("--mark", "also mark the boxes found in their headers, and clear marks that no longer apply")
+    .addOption(new Option("--no-write", "report only (the default now)").hideHelp())
     .action(run((opts) => status(opts)));
 
   program
