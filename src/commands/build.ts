@@ -110,7 +110,7 @@ export async function build(opts: BuildOptions = {}): Promise<string[]> {
     if (err instanceof Detach) return startInBackground(root, opts, ctx);
     if (err instanceof NeedsAnswer) {
       const now = loadState(root);
-      now.waitingFor = { key: err.key, question: err.question };
+      now.waitingFor = { key: err.key, question: err.question, kind: err.kind, choices: err.choices };
       saveState(root, now);
       // The background part prints to a log: name the command the person started with.
       const rerun = opts.backgroundChild ? (now.viaSetup ? "the setup command (npx context-cube, as it was started)" : `the build command (${TOOL_COMMAND} build)`) : undefined;
@@ -245,9 +245,9 @@ export function buildStatus(opts: { cwd?: string; stop?: boolean }): string[] {
   out.push(`Done: ${s.done.join(", ") || "nothing yet"}`, next ? `Next: ${next}` : "The build is complete.");
   const tail = bg || s.lastRunInBackground ? logTail(root) : [];
   if (tail.length) out.push("", `Latest output (${relative(root, backgroundLog(root))}):`, ...tail);
-  const waiting = s.waitingFor as { key: string; question: string } | undefined;
+  const waiting = s.waitingFor as { key: string; question: string; kind?: NeedsAnswer["kind"]; choices?: string[] } | undefined;
   if (!bg && waiting && !tail.some((l) => l.includes(`--answer ${waiting.key}=`))) {
-    out.push("", `Waiting for the person's answer to: ${waiting.question}`, `Ask them, then run the same command again with: --answer ${waiting.key}=<their answer>`);
+    out.push(...needsAnswerMessage(new NeedsAnswer(waiting.key, waiting.question, waiting.kind ?? "text", waiting.choices), s.viaSetup ? "the setup command (npx context-cube, as it was started)" : `the build command (${TOOL_COMMAND} build)`));
   }
   if (!next && s.viaSetup && !s.setupDone) out.push("", "The build is done. Run the setup command again (npx context-cube) to finish: it handles the original files and sums up.");
   return out;

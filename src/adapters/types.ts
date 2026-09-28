@@ -97,6 +97,8 @@ export interface HookDialect {
   personPrompt: "ask" | "rules";
   /** With "rules": will the agent's command rules ask the person before running this command? */
   rulesWillAsk?(root: string, cmd: string): boolean;
+  /** How the agent asks the person a question with choices, when it has a tool for that ("with your AskUserQuestion tool"). */
+  askWith?: string;
 }
 
 export interface AgentAdapter {

@@ -16,6 +16,7 @@ import { linkCode } from "../../src/core/code/links";
 import { readJsonl } from "../../src/core/fsutil";
 import { commitAll, snapshot, tempProject } from "../helpers";
 import { logInstall } from "../../src/commands/log";
+import { pending, propose } from "../../src/commands/living";
 
 async function cubeProject(files: Record<string, string> = {}) {
   const root = tempProject({ "src/clock.ts": "export function endTime() { return 60; }\n", "CLAUDE.md": "# Notes\n", ...files });
@@ -105,6 +106,59 @@ describe("invariant approval", () => {
     expect(e.applied).toBe(true);
     const log = readJsonl<any>(join(root, "context-cube/.state/approvals.log"));
     expect(log[log.length - 1]).toMatchObject({ decision: "applied-automatically", reviewedByPerson: false });
+  });
+});
+
+describe("asking the person about invariant changes", () => {
+  /** Runs `f` as a command the agent ran in a Claude Code session. */
+  async function inClaudeCode<T>(f: () => Promise<T> | T): Promise<T> {
+    process.env.CLAUDECODE = "1";
+    try {
+      return await f();
+    } finally {
+      process.env.CLAUDECODE = "";
+    }
+  }
+  const boxInput = (out: string[]) => JSON.parse(out[out.indexOf("AskUserQuestion input:") + 1]);
+  const coins = (i = 0) => ({ cwd: undefined as string | undefined, text: `- Balances must never go below ${i}.\n`, summary: "Coin balances stay positive.", readWhen: "Changing coins.", reason: "found in review" });
+
+  it("in Claude Code, a proposal ends by asking the person in the question box; the approval's own prompt names it", async () => {
+    const root = await cubeProject();
+    const out = await inClaudeCode(() => propose("new", "no-negative-coins", { ...coins(), cwd: root }));
+    const id = listProposals(root)[0].id;
+    const q = boxInput(out).questions[0];
+    expect(q).toMatchObject({ question: 'Approve the new invariant Y02.X002 "no-negative-coins"? Until then it\'s a candidate, not a rule.', header: "Y02.X002", multiSelect: false });
+    expect(q.options.map((o: { label: string }) => o.label)).toEqual(["Approve", "Reject", "Decide later"]);
+    expect(q.options[0].preview).toBe("Why: found in review\nProposed by " + listProposals(root)[0].by + " on " + listProposals(root)[0].created.slice(0, 10) + "\n\n+ - Balances must never go below 0.");
+    const text = out.join("\n");
+    expect(text).toContain(`Y02.X002 "Approve" → node context-cube/.tool/cube.mjs approve ${id}   (Claude Code asks them to confirm; that yes is the approval)`);
+    expect(text).toContain(`Y02.X002 "Reject" → node context-cube/.tool/cube.mjs reject ${id} --reason`);
+    expect(text).toContain("never approve or reject a change yourself");
+    // Anywhere else, it names the commands, as before.
+    expect((await propose("delete", "Y02.X001", { cwd: root, reason: "obsolete" })).join("\n")).toContain("A person approves it with: node context-cube/.tool/cube.mjs approve P-");
+    expect(pending({ cwd: root }).join("\n")).not.toContain("AskUserQuestion");
+
+    const r = await handleHook("pre-tool-use", { session_id: "s", cwd: root, tool_name: "Bash", tool_input: { command: `node context-cube/.tool/cube.mjs approve ${id}` }, permission_mode: "auto" }, root, new Set(["guard"]));
+    expect(JSON.parse(r.stdout!).hookSpecificOutput).toMatchObject({ permissionDecision: "ask", permissionDecisionReason: `Approving the new invariant Y02.X002 "no-negative-coins" (${id}) needs a person to confirm.` });
+    const del = listProposals(root).find((p) => p.kind === "delete")!;
+    const rj = await handleHook("pre-tool-use", { session_id: "s", cwd: root, tool_name: "Bash", tool_input: { command: `node context-cube/.tool/cube.mjs reject Y02.X001 --reason "keep it"` } }, root, new Set(["guard"]));
+    expect(JSON.parse(rj.stdout!).hookSpecificOutput.permissionDecisionReason).toBe(`Rejecting deleting invariant Y02.X001 "sixty-second-clock" (${del.id}) needs a person to confirm.`);
+  });
+
+  it("asks about four at a time, and each session offers once to go through what's waiting", async () => {
+    const root = await cubeProject();
+    for (let i = 0; i < 5; i++) proposeNew(root, { ...coins(i), name: `coins-${i}`, text: `- Balances stay above ${i}.\n` });
+    const out = await inClaudeCode(() => pending({ cwd: root }));
+    expect(boxInput(out).questions.map((q: { header: string }) => q.header)).toEqual(["Y02.X002", "Y02.X003", "Y02.X004", "Y02.X005"]);
+    expect(out).toContain("1 more is waiting: after these, run node context-cube/.tool/cube.mjs pending to ask about the next ones.");
+
+    const session = (agent: string) => handleHook("session-start", { session_id: "s", cwd: root, source: "startup" }, root, new Set(["session"]), agent);
+    const notice = (await session("claude-code")).stdout!;
+    expect(notice).toContain("Context Cube: 5 invariant changes are waiting for a person's decision: Y02.X002 (new), Y02.X003 (new)");
+    expect(notice).toContain("ask the person whether to go through them now, with your AskUserQuestion tool, so the question pops up for them to pick an answer.");
+    expect((await session("codex")).stdout!).toContain("ask the person whether to go through them now. If they say yes");
+    for (const p of listProposals(root)) reject(root, p.id, "not needed");
+    expect((await session("claude-code")).stdout ?? "").not.toContain("waiting for a person's decision");
   });
 });
 

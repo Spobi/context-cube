@@ -4,6 +4,7 @@ import type { AgentAdapter, AICall, AIResult, HookDialect, HookPlan, PathRule, P
 import { ADAPTER_ID, installHooks, uninstallHooks } from "./hooks";
 import { removeInstructionBlock, writeInstructionBlock } from "../shared/instructionBlock";
 import { findClaude, hasClaudeDesktop, inClaudeDesktop } from "./bin";
+import { PICKER_ASK } from "./picker";
 
 let pathRulesImpl: typeof import("./pathRules") | undefined;
 let permissionsImpl: typeof import("./permissions") | undefined;
@@ -30,6 +31,7 @@ export const claudeDialect: HookDialect = {
     return `Ask the person to run it themselves (in Claude Code they can type: ! ${cmd})`;
   },
   personPrompt: "ask",
+  askWith: PICKER_ASK,
 };
 
 export const claudeCodeAdapter: AgentAdapter = {

@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { registerHookHandler, type HookOutcome } from "../commands/hook";
-import { sessionNotice } from "../core/code/notice";
+import { pendingNotice, sessionNotice } from "../core/code/notice";
+import { listProposals, proposalTitle } from "../core/approvals";
 import { setUpClone } from "../core/install";
 import { relToRoot, TOOL_COMMAND, CUBE_DIR } from "../core/paths";
 import { loadConfig } from "../core/config";
@@ -22,7 +23,7 @@ import { splitCommand } from "../core/logs/shell";
 
 // ---------- session start: stale boxes linked to recent work (plan 8.4) ----------
 
-registerHookHandler(async (event, input, root, features) => {
+registerHookHandler(async (event, input, root, features, agent) => {
   if (event !== "session-start" || !features.has("session")) return;
   if (input.source === "compact") return;
   // A clone that only pulled the cube (a teammate's) gets set up for its merges and commits.
@@ -32,7 +33,7 @@ registerHookHandler(async (event, input, root, features) => {
   } catch {
     // Setting up git must never stop a session.
   }
-  const notice = [setUp.length ? `Context Cube set up this clone: ${setUp.join(", ")}.` : "", sessionNotice(root) ?? ""].filter(Boolean).join("\n");
+  const notice = [setUp.length ? `Context Cube set up this clone: ${setUp.join(", ")}.` : "", sessionNotice(root) ?? "", pendingNotice(root, dialectFor(agent).askWith) ?? ""].filter(Boolean).join("\n");
   return notice ? { exitCode: 0, stdout: notice } : undefined;
 });
 
@@ -255,6 +256,17 @@ const PERSON_ONLY_WHAT: Record<string, string> = {
   replace: "Replacing a record's text",
 };
 
+/** What a person-only command does, for its prompt: an approval names the change it approves. */
+function personOnlyWhat(root: string, verb: string, rest: string): string {
+  if (verb.startsWith("config")) return "Changing a Context Cube setting";
+  if (verb === "approve" || verb === "reject") {
+    const ref = commandWords(rest).find((w) => !w.startsWith("-"));
+    const p = ref ? listProposals(root).find((x) => x.id === ref || x.box === ref) : undefined;
+    if (p) return `${verb === "approve" ? "Approving" : "Rejecting"} ${proposalTitle(p)} (${p.id})`;
+  }
+  return PERSON_ONLY_WHAT[verb];
+}
+
 /**
  * Asks the person to confirm, or blocks when this session skips permission
  * prompts. An agent whose hooks can't ask (Codex) has its own command rules
@@ -312,7 +324,7 @@ registerHookHandler(async (event, input, root, features, agent): Promise<HookOut
     return { exitCode: 2, stderr: reason ?? `That command would change a file Context Cube protects. Use ${TOOL_COMMAND} commands instead.` };
   }
   const m = PERSON_ONLY.exec(cmd);
-  if (m) return needsPerson(m[1].startsWith("config") ? "Changing a Context Cube setting" : PERSON_ONLY_WHAT[m[1]], cmd, input, root, dialect);
+  if (m) return needsPerson(personOnlyWhat(root, m[1], cmd.slice(m.index + m[0].length)), cmd, input, root, dialect);
   const del = deleteTargets(cmd);
   if (del.ids.length || del.unknown) {
     const cube = loadCube(root);

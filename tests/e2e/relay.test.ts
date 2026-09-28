@@ -55,6 +55,45 @@ describe("questions without a terminal", () => {
     expect(parseAnswers(["spot-check=", "use:docs/a.md=yes", "rows-feedback=split sync=engine"])).toEqual({ "spot-check": "", "use:docs/a.md": "yes", "rows-feedback": "split sync=engine" });
   });
 
+  it("in Claude Code, puts each question in its question box, with what each answer means", async () => {
+    /** The question a run stops at. */
+    const stop = (f: (a: ReturnType<typeof relayAsker>) => Promise<unknown>): Promise<NeedsAnswer> =>
+      f(relayAsker({})).then(
+        () => Promise.reject(new Error("it didn't stop")),
+        (e) => e as NeedsAnswer,
+      );
+    const box = (msg: string[]) => JSON.parse(msg[msg.indexOf("AskUserQuestion input:") + 1]).questions[0];
+    const labels = (msg: string[]) => box(msg).options.map((o: { label: string }) => o.label);
+
+    const rows = needsAnswerMessage(await stop((a) => a.choose("Accept these rows?", ["accept", "redo", "edit"], "accept", "rows")), undefined, true);
+    expect(box(rows)).toMatchObject({ question: "Accept these rows?", header: "Rows", multiSelect: false });
+    expect(labels(rows)).toEqual(["Accept", "Redo", "Edit the file"]);
+    expect(rows).toContain('  "Redo" → --answer rows=redo');
+    expect(rows).toContain("  Something they typed instead (Other) → the answer it means: accept, redo, edit");
+    expect(rows.join("\n")).toContain("Ask the person with your AskUserQuestion tool");
+
+    // The tool's advice goes first, marked the way the box expects; a copied label still counts.
+    const rewrite = needsAnswerMessage(await stop((a) => a.confirm("Rewrite them?", true, "rewrite-rules")), undefined, true);
+    expect(labels(rewrite)).toEqual(["Rewrite them (Recommended)", "Leave them"]);
+    expect(rewrite).toContain('  "Rewrite them (Recommended)" → --answer rewrite-rules=yes');
+    expect(await relayAsker({ "rewrite-rules": "Yes (Recommended)" }).confirm("Rewrite them?", true, "rewrite-rules")).toBe(true);
+
+    // A question offers only the answers its kind allows, and never recommends spending.
+    expect(labels(needsAnswerMessage(await stop((a) => a.choose("Go ahead?", ["now", "later", "no"], "now", "go-ahead")), undefined, true))).toEqual(["Now", "Later", "Stop"]);
+    expect(labels(needsAnswerMessage(await stop((a) => a.confirm("Go ahead?", true, "go-ahead")), undefined, true))).toEqual(["Go ahead", "Stop"]);
+    expect(box(needsAnswerMessage(await stop((a) => a.confirm("  Use docs/a.md?", true, "use:docs/a.md")), undefined, true))).toMatchObject({ question: "Use docs/a.md?", header: "Use file" });
+
+    // A typed answer: suggestions to pick, or details asked for first; with nothing to pick, it's asked in the chat.
+    const spot = needsAnswerMessage(await stop((a) => a.text("Type the ids of any that look wrong:", "", "spot-check")), undefined, true);
+    expect(spot).toContain('  "All look right" → --answer spot-check=');
+    expect(spot).toContain('  "Some look wrong" → ask which ids look wrong, then --answer spot-check="<the ids, separated by spaces>"');
+    const at = needsAnswerMessage(await stop((a) => a.text("Start the rest at what time?", "", "start-at")), undefined, true);
+    expect(at).toContain('  "11:30pm" → --answer start-at=11:30pm');
+    const open = needsAnswerMessage(await stop((a) => a.text("Anything else?", "", "notes")), undefined, true);
+    expect(open.join("\n")).not.toContain("AskUserQuestion");
+    expect(open).toContain("Then run the same command again, adding: --answer notes=<their answer> (quote it if it has spaces; for no answer: --answer notes=)");
+  });
+
   it("runs the whole setup one answer at a time, the long part in the background, and spends nothing before a yes", async () => {
     const root = tempProject(fx.constitutionNotes);
     commitAll(root, "init");

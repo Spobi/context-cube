@@ -283,6 +283,19 @@ export function unapprovedChanges(root: string): { id: string; name: string }[] 
   return out;
 }
 
+/** Pending changes in the order a person should see them: weakenings, then deletions, then the rest, oldest first. */
+export function byUrgency(a: Proposal, b: Proposal): number {
+  const rank = (p: Proposal) => (p.weakens ? 0 : p.kind === "delete" ? 1 : 2);
+  return rank(a) - rank(b) || a.created.localeCompare(b.created) || a.box.localeCompare(b.box);
+}
+
+/** What a proposal does, in a few words: `the new invariant Y02.X033 "name"`. */
+export function proposalTitle(p: Proposal): string {
+  if (p.kind === "new") return `the new invariant ${p.box} "${p.name}"`;
+  if (p.kind === "delete") return `deleting invariant ${p.box} "${p.name}"`;
+  return `the edit to invariant ${p.box} "${p.name}"${p.weakens ? " (it loosens or removes a rule)" : ""}`;
+}
+
 export function renderProposal(p: Proposal): string {
   const head =
     p.kind === "delete"

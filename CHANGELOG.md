@@ -2,6 +2,13 @@
 
 To update a project, run `npx context-cube@latest` in it, then commit `context-cube/` so teammates get the same version.
 
+## 0.3.4 (2026-09-28)
+
+- **Questions pop up in Claude Code.** When Claude runs setup, a question that needs you used to come back as text, and Claude typed it into the chat. Now it comes ready for Claude Code's question box (AskUserQuestion): a short header, the answers to pick with what each one does, and "Other" to type your own. Questions answered by typing offer common answers to pick (11:30pm for the start time, "All look right" for the spot check, fewer or more rows), with "Other" for anything else. The tool marks an answer "(Recommended)" only where it advises one, never one that spends usage. Codex and other agents get the question as before.
+- **Proposed invariant changes are asked about right away.** `propose` (and `new-box` in the invariants row) used to print only the command a person could run, so a proposal could sit unnoticed until someone ran `cube pending`. In Claude Code, it now ends by asking you in the question box: Approve, Reject, or Decide later, with the proposed text and why beside the choices. `cube pending` asks about up to four at a time, weakenings first, then oldest first.
+- **Approving still takes your yes on the command.** Picking Approve runs `cube approve`, and Claude Code asks you to confirm it, even in auto mode. That confirmation is the approval: the question box's answer passes through the agent, but the confirmation can't. The confirmation now names what it approves ("Approving the new invariant Y02.X033 "…" (P-…) needs a person to confirm.").
+- **Changes still waiting come up once a session.** The session-start notice lists pending invariant changes and has the agent offer, once, at a break in the work, to go through them. Setup's summary says how many candidates the build drafted for your review.
+
 ## 0.3.3 (2026-09-27)
 
 - **Invariants load on the files they're about, not on every file near them.** An invariant used to govern every file of every box that linked to it, so on Quickie the deaf-channel invariant loaded as "a rule that must never be broken" on 81 files, `Theme.swift` and `StatsService.swift` among them, and opening `CallManager.swift` loaded 21 rules. Now an invariant governs only the files its own text points to, at most 12 of them, clearest first; only an invariant whose text names no code borrows the files of the boxes that link to it. `cube related` and Codex's rule notices follow the same rule. On Quickie, the deaf-channel invariant's path rule went from 81 files to 8, and invariant-to-file pairs from 998 to 233.

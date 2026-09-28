@@ -14,6 +14,7 @@ import type { Link } from "../core/format/header";
 import { isId, parseId } from "../core/format/ids";
 import { loadAliases, resolveAlias } from "../core/state/state";
 import { ADAPTERS } from "../adapters/registry";
+import { askAboutProposals, inClaudeCode } from "../adapters/claude-code/picker";
 import { fixDuplicates } from "../core/check/fix";
 import { proposeNew, unapprovedChanges } from "../core/approvals";
 import { GITATTRIBUTES } from "../core/merge";
@@ -156,6 +157,7 @@ export async function newBox(rowRef: string, name: string, opts: NewBoxOptions, 
     if (!opts.reason) throw new CubeError('Say why with --reason "...": new invariants go in the approvals log.');
     const res = proposeNew(root, { name, summary: opts.summary, readWhen: opts.readWhen ?? "", text: readBody(opts.z1, stdin) ?? "", reason: opts.reason });
     if (opts.index !== false) await reindex(root);
+    if (!res.applied && inClaudeCode()) return [`Created ${res.proposal.box} ${res.proposal.name}, pending until a person approves it.`, ...askAboutProposals([res.proposal])];
     return [`Created ${res.proposal.box} ${res.proposal.name}${res.applied ? "" : ` (pending until a person approves it: ${TOOL_COMMAND} approve ${res.proposal.id})`}`];
   }
   const body = readBody(opts.body, stdin);

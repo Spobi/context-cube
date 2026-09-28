@@ -24,6 +24,7 @@ import { hasBuildState, loadState, saveState } from "../core/build/pipeline";
 import { loadBoxState } from "../core/state/state";
 import { UsageLimitError } from "../ai/runner";
 import { NeedsAnswer, needsAnswerMessage, parseAnswers, terminalAsker, type Asker } from "./ask";
+import { listProposals } from "../core/approvals";
 import { findClaude, hasClaudeDesktop, inClaudeDesktop, type ClaudeBin } from "../adapters/claude-code/bin";
 import { codexOnMachine, inCodexSession } from "../adapters/codex/index";
 import { interview } from "./interview";
@@ -361,6 +362,7 @@ function finish(root: string): string[] {
       `  To get a file back: ${TOOL_COMMAND} restore <file> (or --all for every file).`,
     );
   }
+  const pending = listProposals(root).length;
   const logger = loadManifest(root, "claude-code", "local")?.features.includes("log") || loadManifest(root, "claude-code", "shared")?.features.includes("log");
   const codex = config.agents.includes("codex");
   const commitAlso = [
@@ -374,6 +376,7 @@ function finish(root: string): string[] {
     "  • Every session starts with the rules and the row list. The agent opens rows and boxes only when a task needs them.",
     `  • ${config.update.trigger === "commit" ? "After each commit" : config.update.trigger === "stop" ? "At the end of each session's work" : "When you run /cube-update"}, the agent writes a short note and a cheaper helper updates the cube.`,
     "  • Invariant changes need a person's approval by default. You can change this anytime by asking your AI to turn off invariant approvals (it will ask you to confirm).",
+    pending ? `  • ${pending} candidate invariant${pending === 1 ? " is" : "s are"} waiting for your review, drafted from the project's history; nothing enforces ${pending === 1 ? "it" : "them"} until you approve. Go through them with: ${TOOL_COMMAND} pending` : "",
     logger ? "  • What the agent reads is logged on this machine; see it with: node context-cube/.tool/cube.mjs stats" : "",
     codex ? "  • Codex reads the cube from AGENTS.md. It runs the project's hooks (the guard, notices, and updates) only once each person trusts the project's .codex/ folder: in Codex, run /hooks." : "",
     !codex && codexOnMachine() ? `  • Codex is on this machine too. To have it read the cube: ${TOOL_COMMAND} install --agent codex` : "",

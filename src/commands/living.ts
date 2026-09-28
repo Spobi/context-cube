@@ -3,10 +3,11 @@ import { getBox, getRow, loadCube } from "../core/cube";
 import { addLink, bulkUpdateHeaders, CubeError, removeLink, updateZ0, writeDrawer } from "../core/ops";
 import { reindex } from "../core/index/index";
 import { addFragment, closeEntry, listFragments, openEntry, openNew } from "../core/history";
-import { approve, listProposals, proposeDelete, proposeEdit, proposeNew, reject, renderProposal, unapprovedChanges } from "../core/approvals";
+import { approve, byUrgency, listProposals, proposeDelete, proposeEdit, proposeNew, reject, renderProposal, unapprovedChanges } from "../core/approvals";
 import { lastCommit, updatePlan } from "../core/update";
 import { addAgents, installAgents, removeAgent, uninstallAgents } from "../core/install";
 import { getAdapter } from "../adapters/registry";
+import { askAboutProposals, inClaudeCode } from "../adapters/claude-code/picker";
 import { installTool, version } from "../core/tool";
 import { appendToDrawer, drawerRecord, recordRefusal, replaceRecord } from "../core/records";
 import { readBody, parseLinkSpec } from "./core";
@@ -174,13 +175,14 @@ export async function propose(kind: string, target: string, opts: { text?: strin
   if (res.applied) return [`Applied ${res.proposal.kind} of ${res.proposal.box} at once (invariant approvals are set to auto). It's logged as not reviewed by a person.`];
   const lines = [renderProposal(res.proposal), ""];
   if (res.proposal.kind === "new") lines.push(`${res.proposal.box} is in the cube now, marked pending, so agents see it.`);
-  lines.push(`A person approves it with: ${TOOL_COMMAND} approve ${res.proposal.id}   (or rejects it: ${TOOL_COMMAND} reject ${res.proposal.id} --reason "...")`);
+  if (inClaudeCode()) lines.push(...askAboutProposals([res.proposal]));
+  else lines.push(`A person approves it with: ${TOOL_COMMAND} approve ${res.proposal.id}   (or rejects it: ${TOOL_COMMAND} reject ${res.proposal.id} --reason "...")`);
   return lines;
 }
 
 export function pending(opts: { cwd?: string }): string[] {
   const r = root(opts.cwd);
-  const ps = listProposals(r).sort((a, b) => Number(b.weakens) - Number(a.weakens) || (a.kind === "delete" ? -1 : 0));
+  const ps = listProposals(r).sort(byUrgency);
   const unapproved = unapprovedChanges(r);
   const out: string[] = [];
   if (!ps.length && !unapproved.length) return ["Nothing is waiting for approval."];
@@ -189,7 +191,8 @@ export function pending(opts: { cwd?: string }): string[] {
     out.push("Changed without approval (edited outside the tool):");
     for (const u of unapproved) out.push(`  ${u.id} ${u.name}: restore it from git, or propose the change properly.`);
   }
-  if (ps.length) out.push(`Approve: ${TOOL_COMMAND} approve <id>   Reject: ${TOOL_COMMAND} reject <id> --reason "..."`);
+  if (ps.length && inClaudeCode()) out.push(...askAboutProposals(ps));
+  else if (ps.length) out.push(`Approve: ${TOOL_COMMAND} approve <id>   Reject: ${TOOL_COMMAND} reject <id> --reason "..."`);
   return out;
 }
 
