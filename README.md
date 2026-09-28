@@ -85,6 +85,7 @@ The whole format is in [docs/FORMAT.md](docs/FORMAT.md), so any tool can read or
 ## Day to day
 
 - **Reading:** every session starts with the rules and the row list. The agent opens rows and boxes as its task needs them. When it opens a file that invariants govern, a rule file loads and tells it which invariants to read first.
+- **Invariants read before an edit:** a rule file is only a reminder, and a central file can load a dozen of them at once, so the guard also checks at the edit. An edit near code an invariant is about (a line naming its code, or inside a function or type it names) is held back until the agent has opened that invariant in this session, with a list of what to read; after the context is compacted, it reads them again. See "Reading invariants before editing" below.
 - **Routing without guesswork:** `node context-cube/.tool/cube.mjs related <file or code name>` lists, with no AI, the invariants to read before editing it, the boxes about it, and the history that touched it, each with how it was found (the code name it matched, the commit that changed the file, or the box it was reached through), most clearly linked first. Code search skips comments, URLs, and imports, and a plain word (`band`, `head`) counts only where the code uses it as code, so prose doesn't tie a box to a file; anything linked only by a plain word or two is listed apart. `find <words>` searches the cube's text. The cube's own bookkeeping is kept out of ordinary code searches.
 - **A ceiling on what loads every session:** the block in CLAUDE.md has a size limit (about 3,000 tokens by default). As the cube grows, the row list gets shorter, and `cube check` suggests rules that are only about certain files so they can load with those files instead (`cube edit <rule id> --paths "src/ui/**"`), and names rules that came from files that aren't agent instructions, which are often plans or procedures (`cube move <id> <row>` files one with the row it's about). When an agent opens a file, a one-line rule loads for each invariant that governs it. The ceiling holds: nothing is made a rule that loads every session without asking, and `cube new-box` won't add a rule that goes over it (a person can raise it).
 - **Updating:** after each commit, the agent is told which boxes are linked to what changed. It writes a short note, and a helper on a cheaper model files it in the open history entry and adds what changed, dated, to the boxes it made out of date, without rewriting what's there. You can also run `/cube-update` in Claude Code.
@@ -125,6 +126,14 @@ To turn approvals off, ask your agent to; it runs `cube config set invariants.ap
 /context-cube/Y02-invariants/  @your-github-user
 /context-cube/.state/approvals.log  @your-github-user
 ```
+
+### Reading invariants before editing
+
+When the agent opens a file, a one-line rule loads for each invariant that governs it, but a reminder can be skipped: on a central file a dozen load at once. So the guard hook checks each edit (Claude Code's edit tools, Codex's patches). If the edit is near code an invariant is about, meaning a changed line or the lines around it name that code, or the edit is inside a function or type it names, the invariant must have been opened in this session. If it hasn't been, the edit is held back with the invariants to read, where they are, and about how many tokens they come to. The agent reads them and makes the edit again, with no one having to step in. A write that replaces a whole file needs every invariant that governs the file. Invariants read before the context was compacted have to be read again.
+
+For code where every rule matters on every change, have the check ask for all of them: `cube config set invariants.readAllFor "ios/Calling/**,ios/Tests/Call*"` (globs from the project root). Then every invariant that governs a file there is read before its first edit, whatever part of the file changes. `invariants.readFirst` sets the check for everything else: `near` (the default), `all`, or `off`; with `off`, it still covers the `readAllFor` files.
+
+One invariant holds edits back at most twice a session. After that the edit goes ahead and `cube stats` counts it as a possible miss, so a read the hooks couldn't see never stops the work. Edits made through shell commands (a script that writes the file) aren't checked. The check starts once the project's hooks are updated (run setup again), since the guard needs to see what the agent reads.
 
 ## Teams
 

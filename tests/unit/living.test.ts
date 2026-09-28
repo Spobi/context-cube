@@ -405,10 +405,10 @@ describe("teams", () => {
     expect(JSON.stringify(local().hooks)).toContain("guard");
     await installAgents(root, undefined, { shared: true });
     const shared = JSON.parse(readFileSync(join(root, ".claude/settings.json"), "utf8"));
-    for (const f of ["guard", "session", "update"]) expect(JSON.stringify(shared.hooks)).toContain(`--features ${f}`);
+    for (const f of ["guard", "session", "update"]) expect(JSON.stringify(shared.hooks)).toMatch(new RegExp(`--features [\\w,]*\\b${f}\\b`));
     expect(shared.permissions.deny).toContain("Read(/context-cube/.state/archive/**)");
     // Personal settings keep only the logger: no hook runs twice.
-    expect(JSON.stringify(local().hooks)).not.toMatch(/--features (guard|session|update)/);
+    expect(JSON.stringify(local().hooks)).not.toMatch(/--features [\w,]*\b(guard|session|update)\b/);
     expect(JSON.stringify(local().hooks)).toContain("--features log");
     expect(Object.values(local().hooks).every((groups) => (groups as unknown[]).length > 0)).toBe(true);
     expect(local().permissions?.deny ?? []).not.toContain("Read(/context-cube/.state/archive/**)");

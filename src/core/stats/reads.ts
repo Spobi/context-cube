@@ -14,6 +14,7 @@ import { extractBlock } from "../index/block";
 import { readAgentActivity, type AgentActivity } from "../logs/transcript";
 import { openedBoxes, type OpenedBox } from "./unused";
 import { governingByFile, STRONG } from "../code/governs";
+import { loadReadFirst } from "../code/readFirst";
 
 /**
  * What was read (plan 10). Compares what the agent read with what reading the
@@ -181,9 +182,13 @@ export function computeStats(
     // Possible misses: an edited file that invariants govern, where the agent hadn't opened
     // their Z1 before its first edit there. A path rule loading doesn't count: it's a
     // one-line pointer that loads whenever the file is read, and a file is read before it's edited.
+    // Where the read-first check ran, it decided what each edit needed: its misses are the
+    // edits it let through with those unread.
     const misses: Miss[] = [];
+    const checked = loadReadFirst(root, session);
+    if (checked.checked) for (const m of checked.misses) misses.push({ file: m.file, box: m.invariants[0], invariants: m.invariants });
     const firstEdit = new Map<string, string>();
-    for (const e of editsBySession.get(session) ?? []) if (!firstEdit.has(e.file) || e.t < firstEdit.get(e.file)!) firstEdit.set(e.file, e.t);
+    if (!checked.checked) for (const e of editsBySession.get(session) ?? []) if (!firstEdit.has(e.file) || e.t < firstEdit.get(e.file)!) firstEdit.set(e.file, e.t);
     for (const [file, t] of firstEdit) {
       const governing = governs.get(file) ?? [];
       const unread = governing.filter((g) => {
@@ -314,7 +319,7 @@ export function renderStats(r: StatsReport, opts: { all?: boolean } = {}): strin
     out.push(`  Reach (boxes opened, by the age of what they hold): under 30 days ${r.reach.under30}, 30–90 days ${r.reach.days30to90}, over 90 days ${r.reach.over90}${r.reach.undated ? `, undated ${r.reach.undated}` : ""}`);
   }
   if (r.before) out.push(`  Measured before the cube: ${fmtInt(r.before.medianMemoryTokens)} tokens per session read from memory files (median of ${r.before.sessions} session${r.before.sessions === 1 ? "" : "s"})`);
-  out.push(`All figures are estimates (characters ÷ ${r.charsPerToken}). A possible miss is a file edited before the invariants that govern it were opened (the one-line rule that loads with the file doesn't count). "Without the cube" is what reading the same areas in full would have taken. "Possibly unused" means nothing the box names came up again after it was opened; it's a rough signal.`);
+  out.push(`All figures are estimates (characters ÷ ${r.charsPerToken}). A possible miss is a file edited before the invariants that govern it were opened (the one-line rule that loads with the file doesn't count); in sessions where the read-first check ran, an edit it let through with the invariants it needed unread. "Without the cube" is what reading the same areas in full would have taken. "Possibly unused" means nothing the box names came up again after it was opened; it's a rough signal.`);
   return out.join("\n");
 }
 

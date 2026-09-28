@@ -75,10 +75,24 @@ export interface AdapterCapabilities {
   permissionPrompts: boolean;
 }
 
+/**
+ * One change an edit makes to a file: `old` replaced by `new` (every
+ * occurrence with `all`), or the whole file when there's no `old` (a write, a
+ * notebook cell, a patch that adds or deletes the file).
+ */
+export interface EditPiece {
+  file: string;
+  old?: string;
+  new?: string;
+  all?: boolean;
+}
+
 /** A tool call as the cube's hooks see it, whatever the agent calls its tools. */
 export type ToolCall =
-  /** Files an edit tool changes (as the agent named them: absolute, or relative to the session's cwd). */
-  | { kind: "edit"; files: string[] }
+  /** Files an edit tool changes (as the agent named them: absolute, or relative to the session's cwd), and what it changes in them. */
+  | { kind: "edit"; files: string[]; pieces: EditPiece[] }
+  /** Files a read tool opens. */
+  | { kind: "read"; files: string[] }
   | { kind: "shell"; command: string }
   | { kind: "other" };
 

@@ -24,7 +24,12 @@ const FEATURE_EVENTS: Record<HookFeature, EventSpec[]> = {
     { event: "SessionEnd", cli: "session-end", timeout: 10 },
   ],
   session: [{ event: "SessionStart", cli: "session-start", timeout: 10 }],
-  guard: [{ event: "PreToolUse", cli: "pre-tool-use", matchers: ["Edit", "Write", "MultiEdit", "NotebookEdit", "Bash"], timeout: 10 }],
+  guard: [
+    { event: "PreToolUse", cli: "pre-tool-use", matchers: ["Edit", "Write", "MultiEdit", "NotebookEdit", "Bash"], timeout: 10 },
+    // Which invariants the agent opened, and when its context was compacted, for the read-first check.
+    { event: "PostToolUse", cli: "post-tool-use", matchers: ["Read", "Bash"], timeout: 10 },
+    { event: "SessionStart", cli: "session-start", timeout: 10 },
+  ],
   update: [
     { event: "PostToolUse", cli: "post-tool-use", matchers: ["Bash", "Edit", "Write", "MultiEdit", "NotebookEdit"], timeout: 10 },
     { event: "Stop", cli: "stop", timeout: 10 },

@@ -3,7 +3,7 @@ import { readdirSync } from "node:fs";
 import { isDir, remove } from "../../core/fsutil";
 import { deleteManifest, emptyManifest, loadManifest, saveManifest } from "../../core/installs";
 import { splitCommand } from "../../core/logs/shell";
-import type { HookDialect, HookFeature, HookPlan, SettingsScope } from "../types";
+import type { EditPiece, HookDialect, HookFeature, HookPlan, SettingsScope } from "../types";
 import { addHooks, loadSettings, readRaw, removeHooks, saveOrRemove, saveRestoring, type HookEntry } from "../shared/jsonSettings";
 import { excludeLocally, unexcludeLocally } from "../claude-code/hooks";
 import { TOOL_COMMAND } from "../../core/paths";
@@ -180,6 +180,58 @@ export function patchFiles(patch: string): string[] {
 }
 
 /**
+ * What an apply_patch edit changes: each `@@` hunk of an updated file as the
+ * text it replaces and the text it puts there (its context lines in both),
+ * and an added, deleted, or moved file whole.
+ */
+export function patchPieces(patch: string): EditPiece[] {
+  const pieces: EditPiece[] = [];
+  /** The file the last header named, and the one whose hunks are being read (an updated file that isn't moving). */
+  let named: string | undefined;
+  let file: string | undefined;
+  let hunk: { old: string[]; new: string[] } | undefined;
+  const flush = () => {
+    if (file && hunk && (hunk.old.length || hunk.new.length)) pieces.push({ file, old: hunk.old.join("\n"), new: hunk.new.join("\n") });
+    hunk = undefined;
+  };
+  for (const line of patch.split("\n")) {
+    const head = /^\*\*\* (Add|Update|Delete) File: (.+?)\s*$/.exec(line);
+    const move = /^\*\*\* Move to: (.+?)\s*$/.exec(line);
+    if (head) {
+      flush();
+      named = head[2];
+      file = head[1] === "Update" ? named : undefined;
+      if (!file) pieces.push({ file: named });
+      continue;
+    }
+    if (move || line.startsWith("*** End Patch")) {
+      flush();
+      // A moved file changes as a whole, where it was and where it goes.
+      if (move && named) pieces.push({ file: named }, { file: move[1] });
+      file = undefined;
+      continue;
+    }
+    if (!file) continue;
+    if (line.startsWith("@@")) {
+      flush();
+      hunk = { old: [], new: [] };
+      continue;
+    }
+    hunk ??= { old: [], new: [] };
+    if (line.startsWith("-")) hunk.old.push(line.slice(1));
+    else if (line.startsWith("+")) hunk.new.push(line.slice(1));
+    else if (line.startsWith(" ") || line === "") {
+      hunk.old.push(line.slice(1));
+      hunk.new.push(line.slice(1));
+    }
+  }
+  flush();
+  // A file changed whole anywhere in the patch counts whole.
+  const whole = new Set(pieces.filter((p) => p.old === undefined).map((p) => p.file));
+  return [...pieces.filter((p) => p.old !== undefined && !whole.has(p.file)), ...[...whole].map((file) => ({ file }))];
+}
+
+/**
  * The script a shell tool call runs. Codex may give it as a string or as an
  * argument list, and may wrap it in `bash -lc '…'`.
  */
@@ -204,8 +256,12 @@ export const codexDialect: HookDialect = {
     if (tool === "apply_patch" || tool === "Edit" || tool === "Write") {
       const text = typeof ti.command === "string" ? ti.command : typeof ti.patch === "string" ? ti.patch : typeof ti.input === "string" ? ti.input : "";
       const files = patchFiles(text);
-      if (!files.length && typeof ti.file_path === "string") files.push(ti.file_path);
-      return { kind: "edit", files };
+      const pieces = patchPieces(text);
+      if (!files.length && typeof ti.file_path === "string") {
+        files.push(ti.file_path);
+        pieces.push({ file: ti.file_path });
+      }
+      return { kind: "edit", files, pieces };
     }
     if (tool === "Bash" || tool === "shell" || tool === "exec_command") return { kind: "shell", command: shellScript(ti.command ?? ti.cmd) };
     return { kind: "other" };

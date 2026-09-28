@@ -11,9 +11,11 @@ import { ROW_DIR_RE } from "../core/format/ids";
 import { gitRoot } from "../core/git";
 import { isCommitCommand, lastCommit, loadMarks, onlyCubeFiles, saveMarks, updatePlan } from "../core/update";
 import { dialectFor, getAdapter } from "../adapters/registry";
-import type { HookDialect } from "../adapters/types";
+import type { EditPiece, HookDialect } from "../adapters/types";
 import { pathRulesFor, rulesForFile } from "../core/code/pathRules";
-import { bashReadFiles } from "../core/logs/extract";
+import { bashReadFiles, type HookInput } from "../core/logs/extract";
+import { logError } from "../core/logs/store";
+import { checkEdit, noteCompact, noteReads } from "../core/code/readFirst";
 import { splitCommand } from "../core/logs/shell";
 
 /**
@@ -310,6 +312,8 @@ registerHookHandler(async (event, input, root, features, agent): Promise<HookOut
       const reason = protectedReason(root, resolve(cwd, file));
       if (reason) return { exitCode: 2, stderr: reason };
     }
+    const hold = readFirst(root, input, call.pieces);
+    if (hold) return { exitCode: 2, stderr: hold };
     return ruleNotices(root, agent, input, call.files.map((f) => resolve(cwd, f)));
   }
   if (call.kind !== "shell") return;
@@ -336,6 +340,26 @@ registerHookHandler(async (event, input, root, features, agent): Promise<HookOut
     if (records.length) return needsPerson(`Deleting ${records.join(", ")}, which hold records (text moved from the original files, or closed history entries),`, cmd, input, root, dialect);
     if (del.unknown) return needsPerson("Deleting a box named through a shell variable (it may hold a record)", cmd, input, root, dialect);
   }
+});
+
+// ---------- invariants read before an edit (readFirst.ts) ----------
+
+function readFirst(root: string, input: HookInput, pieces: EditPiece[]): string | undefined {
+  const cwd = String(input.cwd || root);
+  const rel = pieces.map((p) => ({ ...p, file: relToRoot(root, resolve(cwd, p.file)) }));
+  if (!rel.length) return undefined;
+  try {
+    return checkEdit(root, String(input.session_id ?? "unknown"), loadConfig(root), rel);
+  } catch (err) {
+    // A broken cube or setting must never stop the work; `cube check` reports it.
+    logError(root, "read-first check", err);
+    return undefined;
+  }
+}
+
+registerHookHandler(async (event, input, root, features) => {
+  if (event !== "session-start" || !features.has("guard") || input.source !== "compact") return;
+  noteCompact(root, String(input.session_id ?? "unknown"));
 });
 
 // ---------- rule notices, for agents without path rule files (plan 8.5) ----------
@@ -371,8 +395,11 @@ function ruleNotices(root: string, agent: string, input: Record<string, unknown>
 registerHookHandler(async (event, input, root, features, agent): Promise<HookOutcome | void> => {
   if (event !== "post-tool-use" || !features.has("guard")) return;
   const call = dialectFor(agent).toolCall(input);
+  const cwd = input.cwd || root;
+  const read = call.kind === "read" ? call.files.map((f) => resolve(cwd, f)) : call.kind === "shell" ? bashReadFiles(call.command, cwd) : [];
+  noteReads(root, String(input.session_id ?? "unknown"), read.map((f) => relToRoot(root, f)));
   if (call.kind !== "shell") return;
-  return ruleNotices(root, agent, input, bashReadFiles(call.command, input.cwd || root));
+  return ruleNotices(root, agent, input, read);
 });
 
 // ---------- update: after a commit, or at the end of work (plan 8.1) ----------

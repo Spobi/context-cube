@@ -152,7 +152,7 @@ export class Changes {
 }
 
 /** Near which of the names the file has (now, or in lines the change removed); undefined when it has none. */
-function narrow(hunks: Hunk[], text: string, names: string[]): string[] | undefined {
+export function narrow(hunks: Hunk[], text: string, names: string[]): string[] | undefined {
   const mine = names.filter((n) => word(n).test(text) || hunks.some((h) => h.changed.some((c) => word(n).test(c.text))));
   return mine.length ? namesNear(hunks, text, mine) : undefined;
 }

@@ -5,12 +5,23 @@ import { exists, readJson, writeJson } from "./fsutil";
 export const PRESETS = ["economy", "balanced", "max"] as const;
 export const HISTORY_UNITS = ["build", "release", "pr", "day", "commit", "session"] as const;
 export const UPDATE_TRIGGERS = ["commit", "stop", "manual"] as const;
+export const READ_FIRST = ["near", "all", "off"] as const;
 
 export const ConfigSchema = z.object({
   preset: z.enum(PRESETS).default("balanced"),
   invariants: z
-    .object({ approval: z.enum(["required", "auto"]).default("required") })
-    .default({ approval: "required" }),
+    .object({
+      approval: z.enum(["required", "auto"]).default("required"),
+      /**
+       * Which invariants the agent must have open before it edits a file they
+       * govern: those whose code the edit is near, all of them, or none (the
+       * path rules still name them).
+       */
+      readFirst: z.enum(READ_FIRST).default("near"),
+      /** Files (globs from the project root) where every invariant that governs them is read first, whatever readFirst says. */
+      readAllFor: z.array(z.string()).default([]),
+    })
+    .default({ approval: "required", readFirst: "near", readAllFor: [] }),
   history: z
     .object({
       unit: z.enum(HISTORY_UNITS).optional(),
@@ -62,6 +73,8 @@ export function saveConfig(root: string, config: CubeConfig): void {
 export const SETTING_KEYS = [
   "preset",
   "invariants.approval",
+  "invariants.readFirst",
+  "invariants.readAllFor",
   "history.unit",
   "history.gitCommits",
   "update.trigger",
@@ -89,7 +102,7 @@ export function getSetting(config: CubeConfig, key: string): unknown {
 
 /** Parses a command-line value: JSON if it parses, comma lists for array settings, else a string. */
 export function parseSettingValue(key: string, raw: string): unknown {
-  const arrayKeys = new Set(["agents", "sources", "memoryFiles"]);
+  const arrayKeys = new Set(["agents", "sources", "memoryFiles", "invariants.readAllFor"]);
   try {
     const v = JSON.parse(raw);
     if (arrayKeys.has(key) && typeof v === "string") return [v];

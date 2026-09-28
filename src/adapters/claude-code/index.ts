@@ -19,8 +19,15 @@ export const claudeDialect: HookDialect = {
     const ti = input.tool_input ?? {};
     if (EDIT_TOOLS.has(tool)) {
       const file = String(ti.file_path ?? ti.notebook_path ?? "");
-      return { kind: "edit", files: file ? [file] : [] };
+      if (!file) return { kind: "edit", files: [], pieces: [] };
+      const piece = (e: Record<string, unknown>) => ({ file, old: String(e.old_string ?? ""), new: String(e.new_string ?? ""), all: e.replace_all === true });
+      const pieces =
+        tool === "Edit" ? [piece(ti)]
+        : tool === "MultiEdit" && Array.isArray(ti.edits) ? ti.edits.map((e) => piece(e as Record<string, unknown>))
+        : [{ file }];
+      return { kind: "edit", files: [file], pieces };
     }
+    if (tool === "Read") return { kind: "read", files: typeof ti.file_path === "string" ? [ti.file_path] : [] };
     if (tool === "Bash") return { kind: "shell", command: String(ti.command ?? "") };
     return { kind: "other" };
   },
