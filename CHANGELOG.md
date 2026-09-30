@@ -2,6 +2,10 @@
 
 To update a project, run `npx context-cube@latest` in it, then commit `context-cube/` so teammates get the same version.
 
+## 0.4.0 (2026-09-30)
+
+A version mark for everything since 0.3.5, with no new changes: the bench ready to run on a real project (Opus scores it blind, it resumes after a usage limit, and it prepares untracked files the build needs), ids joined in one argument, and update commits kept out of history entries.
+
 ## 0.3.10 (2026-09-30)
 
 - **Updating the cube no longer rewrites a history entry's commits.** An entry's commits are the ones whose message names its version. The match allowed a longer version, so an entry keyed "0.3" took every 0.3.x commit, newest 10 kept. On Quickie, "0.3" is a section of `call_quality.md`, Y01.X018, and each "Update Context Cube to 0.3.x" commit landed on it and pushed a real app commit out (20ac487, the Go Dark change, went with 0.3.9). Now a key has to end where the version does ("0.3" isn't "0.3.8"; "0.3.8" still covers "0.3.8 (2)"), and commits that only touch the cube and its agent files are never an entry's commits. On Quickie this empties the commit lists of Y01.X016–X019 (sections 0.1–0.4, never builds) and moves their dates to when each section was written. No other entry changes. To repair an existing cube: `cube links Y01.X016 Y01.X017 Y01.X018 Y01.X019`.
