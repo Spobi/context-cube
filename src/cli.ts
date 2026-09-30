@@ -337,7 +337,12 @@ export function buildProgram(): Command {
     .option("--runs <n>", "runs per task per copy")
     .option("--model <model>", "the main session's model")
     .action(run((opts) => bench.benchRun(opts)));
-  b.command("score").description("Score each run blind, 1–5, without seeing which copy made it.").option("--results <dir>", "results folder (default: the latest)").action(run((opts) => bench.benchScore(opts)));
+  b.command("score")
+    .description("Score each run blind, 1–5, without seeing which copy made it.")
+    .option("--results <dir>", "results folder (default: the latest)")
+    .option("--ai", "let Opus score the runs blind instead of you")
+    .option("--yes", "with --ai, don't ask before starting")
+    .action(run((opts) => bench.benchScore(opts)));
   b.command("report").description("Write the report (unblinded).").option("--results <dir>", "results folder (default: the latest)").action(run((opts) => bench.benchReportCmd(opts)));
   b.command("clean").description("Remove the two bench copies (git worktrees).").action(run((opts) => bench.benchClean(opts)));
 

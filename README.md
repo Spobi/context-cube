@@ -165,7 +165,7 @@ Everything stays on your machine: the cube is plain files in your repo, and logs
 
 ## Results
 
-The A/B experiment (`cube bench`) runs the same tasks in two copies of a real project, one with its original memory files and one with the cube, and a person scores the changes blind, including a yes/no for each invariant a task must keep. Besides cost and scores, the report measures retrieval, so it can say why a copy did better or worse: whether the agent read each required invariant before its first edit, how many reads it took to find it, how much memory it read before editing, and how many boxes it opened for nothing. Results will be written up here once it has run.
+The A/B experiment (`cube bench`) runs the same tasks in two copies of a real project, one with its original memory files and one with the cube, and a person (or Opus, with `cube bench score --ai`) scores the changes blind, including a yes/no for each invariant a task must keep. Besides cost and scores, the report measures retrieval, so it can say why a copy did better or worse: whether the agent read each required invariant before its first edit, how many reads it took to find it, how much memory it read before editing, and how many boxes it opened for nothing. Results will be written up here once it has run.
 
 ## License
 

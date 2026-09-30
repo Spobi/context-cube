@@ -21,6 +21,8 @@ export interface Score {
   /** Per invariant the task must respect: did the change keep it? */
   respected?: Record<string, "yes" | "no" | "unclear">;
   note?: string;
+  /** Who scored it: absent for a person, else the judge model. */
+  by?: string;
   t: string;
 }
 
@@ -36,7 +38,7 @@ export function loadScores(dir: string): Score[] {
 }
 
 /** A stable shuffle, so the order doesn't reveal the copy. */
-function blindOrder(runs: RunRecord[], seed: string): RunRecord[] {
+export function blindOrder(runs: RunRecord[], seed: string): RunRecord[] {
   const key = (r: RunRecord) => createHash("sha1").update(`${seed}:${r.id}`).digest("hex");
   return [...runs].sort((a, b) => key(a).localeCompare(key(b)));
 }

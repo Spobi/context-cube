@@ -20,6 +20,8 @@ export const STEP_TIERS: Record<string, Record<Preset, Tier>> = {
   "interview-rules": { economy: "sonnet", balanced: "sonnet", max: "sonnet" },
   detail: { economy: "sonnet", balanced: "sonnet", max: "opus" },
   update: { economy: "haiku", balanced: "haiku", max: "sonnet" },
+  /** Blind scoring of bench runs: the biggest model, whatever the preset. */
+  "bench-judge": { economy: "opus", balanced: "opus", max: "opus" },
   /** A trivial step for testing the runner live. */
   ping: { economy: "haiku", balanced: "haiku", max: "haiku" },
 };

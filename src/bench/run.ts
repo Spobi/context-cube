@@ -189,6 +189,8 @@ async function runOne(copies: Copies, task: Task, copy: CopyName, n: number, mod
   git(["add", "-A"], c.path);
   const diff = git(["diff", "--cached", c.prep, "--", ".", ":(exclude)context-cube/.logs"], c.path);
   writeText(join(dir, "diff.patch"), diff.stdout);
+  // More context around each change, for a judge that can't open the files.
+  writeText(join(dir, "diff-wide.patch"), git(["diff", "--cached", "-U25", c.prep, "--", ".", ":(exclude)context-cube/.logs"], c.path).stdout);
   rec.changedFiles = git(["diff", "--cached", "--name-only", c.prep, "--", ".", ":(exclude)context-cube/.logs"], c.path).stdout.split("\n").filter(Boolean);
   git(["reset", "-q"], c.path);
   if (task.check) {

@@ -97,6 +97,12 @@ function table(rows: [string, Row][]): string[] {
   return out;
 }
 
+/** Who gave the scores: a person, a model that never saw which copy made a change, or both. */
+function scorers(scores: Map<string, Score>): string {
+  const by = new Set([...scores.values()].map((s) => (s.by ? `${s.by} (a model shown only the task, the rules, and the code changes with every mention of the notes taken out)` : "a person")));
+  return by.size ? [...by].join(" and ") : "a person";
+}
+
 export function benchReport(dir: string): { path: string; text: string } {
   const meta = readJson<{ base: string; model: string; runs: number; started: string; tasks: Task[] }>(join(dir, "meta.json"));
   const runs = loadRuns(dir);
@@ -107,7 +113,7 @@ export function benchReport(dir: string): { path: string; text: string } {
     "",
     `Commit ${meta.base.slice(0, 10)} · model ${meta.model} · ${meta.runs} runs per task per copy · started ${meta.started.slice(0, 16).replace("T", " ")}`,
     "",
-    "The **files** copy has the project's current memory files; the **cube** copy has the Context Cube instead (the original files removed). Scores are blind 1–5 ratings by a person; the rest is measured. \"Memory/cube read\" is estimated tokens read from memory files or the cube (characters ÷ 4). Costs are the agent's list-price figures, not what a subscription pays.",
+    `The **files** copy has the project's current memory files; the **cube** copy has the Context Cube instead (the original files removed). Scores are blind 1–5 ratings by ${scorers(scores)}; the rest is measured. "Memory/cube read" is estimated tokens read from memory files or the cube (characters ÷ 4). Costs are the agent's list-price figures, not what a subscription pays.`,
     "",
     `Scored runs: ${scores.size} of ${runs.length}.`,
     "",

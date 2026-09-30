@@ -5,6 +5,7 @@ import { defaultTasksPath, loadTasks, writeStarter } from "../bench/tasks";
 import { runBench } from "../bench/run";
 import { latestResults, scoreRuns } from "../bench/score";
 import { benchReport } from "../bench/report";
+import { judgeRuns, unscoredRuns } from "../bench/judge";
 import { removeCopies } from "../bench/copies";
 import { UsageLimitError } from "../ai/runner";
 
@@ -29,10 +30,24 @@ export async function benchRun(opts: { cwd?: string; tasks?: string; only?: stri
   }
 }
 
-export async function benchScore(opts: { cwd?: string; results?: string }): Promise<string[]> {
+export async function benchScore(opts: { cwd?: string; results?: string; ai?: boolean; yes?: boolean }): Promise<string[]> {
   const root = findProjectRoot(opts.cwd);
   const dir = opts.results ?? latestResults(root);
   if (!dir) throw new CubeError("No bench results yet. Run: cube bench run");
+  if (opts.ai) {
+    const todo = unscoredRuns(dir).length;
+    if (!todo) return ["Every run is already scored. Write the report with: cube bench report"];
+    const ask = terminalAsker({ yes: opts.yes });
+    if (ask.interactive && !(await ask.confirm(`Opus will score ${todo} run${todo === 1 ? "" : "s"} blind, one call each (it never sees which copy made a change). This uses your plan's Opus usage. Go ahead?`, true))) return ["Not started."];
+    try {
+      const n = await judgeRuns(root, dir, { say: (s) => console.log(s) });
+      const left = unscoredRuns(dir).length;
+      return [`Opus scored ${n} run${n === 1 ? "" : "s"}.${left ? ` ${left} still unscored; run this again to retry them.` : ""}`, "Write the report with: cube bench report"];
+    } catch (err) {
+      if (err instanceof UsageLimitError) return [`${err.message}`, "The finished scores are saved; run this again after the reset."];
+      throw err;
+    }
+  }
   const n = await scoreRuns(dir, terminalAsker());
   return [`Scored ${n} run${n === 1 ? "" : "s"}. Write the report with: cube bench report`];
 }

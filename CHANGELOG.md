@@ -2,6 +2,10 @@
 
 To update a project, run `npx context-cube@latest` in it, then commit `context-cube/` so teammates get the same version.
 
+## 0.3.6 (2026-09-30)
+
+- **Opus can score the bench.** `cube bench score --ai` has Opus score each run instead of you, one call per run, in shuffled order. It sees the task, the full text of each rule the task must keep, the code changes (with 25 lines of context around each), the agent's last message, and the test result. It never sees which copy made the change. Edits to the cube, memory files and agent settings are left out of the diff. Box ids, cube paths, memory file names, section marks and the copies' folder names are replaced in everything it reads. It gives the same scores a person would, including a yes/no per rule with a reason, and the report says who scored. Scores are saved as they arrive, so after a usage limit, run it again to finish.
+
 ## 0.3.5 (2026-09-28)
 
 - **Invariants are read before the edits they're about.** The one-line path rules only remind: on Quickie, an agent opened `CallManager.swift`, got 19 of them, and changed four call-engine files without opening one. `cube stats` counted 5 possible misses. Now the guard checks each edit (Claude Code's edit tools, Codex's patches). An edit near code an invariant is about is held back until the agent has opened that invariant in this session, with a list of what to read and about how many tokens it is. "Near" is what already made a box stale in 0.3.3: a changed line, or the lines around it, names the invariant's code, or the edit is inside a function or type it names. A write that replaces a whole file needs every invariant that governs it. Replayed on the commit behind that session, the check asks for 11 of the 23 invariants that govern the files it changed (about 14,000 tokens). An edit to `connectSignaling` needs 3 of the 20 on `CallManager.swift`.

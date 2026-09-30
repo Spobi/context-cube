@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from "vitest";
-import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { stringify } from "yaml";
 import { build } from "../../src/commands/build";
@@ -9,6 +9,8 @@ import { runBench } from "../../src/bench/run";
 import { benchReport } from "../../src/bench/report";
 import { loadTasks } from "../../src/bench/tasks";
 import { cleanEnv } from "../../src/bench/run";
+import { judgeRuns, redact } from "../../src/bench/judge";
+import { FakeBackend } from "../../src/ai/backends";
 import { commitAll, tempProject, recordedBackend } from "../helpers";
 import * as fx from "../fixtures/projects";
 
@@ -104,6 +106,42 @@ echo '{"type":"result","subtype":"success","is_error":false,"result":"done","ses
     } finally {
       delete process.env.CUBE_CLAUDE_BIN;
     }
+  });
+
+  it("lets a model score runs blind: no cube or memory edits, ids, or copy folders reach it", async () => {
+    const root = await builtProject();
+    const dir = join(tempProject({}, { git: false }), "results");
+    const task = { id: "old-incident", size: "complex", older: true, prompt: "Fix the tombstones.", invariants: ["Y02.X003", "Keep the queue ordered"], allow: [], check: "true" };
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, "meta.json"), JSON.stringify({ base: "abc", model: "sonnet", runs: 1, started: "2026-09-30T00:00:00Z", tasks: [task] }));
+    const runs = (["files", "cube"] as const).map((copy) => {
+      const d = join(dir, "old-incident", `${copy}-1`);
+      mkdirSync(d, { recursive: true });
+      const code = `diff --git a/src/sync/queue.ts b/src/sync/queue.ts\n--- a/src/sync/queue.ts\n+++ b/src/sync/queue.ts\n@@ -1 +1,2 @@\n+// ${copy === "cube" ? "see Y02.X003 and context-cube/Y02-invariants" : "see CONSTITUTION.md §3.2"}\n`;
+      const memory = copy === "cube" ? "diff --git a/context-cube/Y01-history/X009/Z0-overview.md b/context-cube/Y01-history/X009/Z0-overview.md\n+a history note\n" : "diff --git a/NOTES.md b/NOTES.md\n+a history note\n";
+      writeFileSync(join(d, "diff.patch"), code + memory);
+      writeFileSync(join(d, "final-message.md"), copy === "cube" ? "I read the invariants box in the cube first." : "I read CONSTITUTION.md first.");
+      writeFileSync(join(d, "check.txt"), `$ true\nexit 0\n/tmp/context-cube-bench/proj-1234/${copy}/src ok`);
+      return { id: `old-incident.${copy}.1`, task: "old-incident", copy, n: 1, ok: true, changedFiles: [], dir: d };
+    });
+    writeFileSync(join(dir, "runs.jsonl"), runs.map((r) => JSON.stringify(r)).join("\n") + "\n");
+    const fake = new FakeBackend((call) => ({ correctness: 4, invariants: 5, scope: 5, rules: [{ rule: "Rule A", verdict: "yes", why: "untouched" }, { rule: "Rule B", verdict: "no", why: "reorders" }], summary: "Adds a comment." }));
+    expect(await judgeRuns(root, dir, { backend: fake })).toBe(2);
+    expect(fake.calls.map((c) => c.tier)).toEqual(["opus", "opus"]);
+    for (const c of fake.calls) {
+      expect(c.prompt).toContain("src/sync/queue.ts");
+      expect(c.prompt).toContain("### Rule A");
+      expect(c.prompt).toContain("Keep the queue ordered");
+      expect(c.prompt).not.toMatch(/Y0\d\.X|context-cube|CONSTITUTION\.md|NOTES\.md|history note|\/files\/|\/cube\/|§|\bcube\b|\bbox\b/i);
+    }
+    const scores = readFileSync(join(dir, "scores.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    expect(scores.map((x) => x.respected)).toEqual([{ "Y02.X003": "yes", "Keep the queue ordered": "no" }, { "Y02.X003": "yes", "Keep the queue ordered": "no" }]);
+    expect(scores[0].by).toBe("fake-opus");
+    expect(scores[0].note).toContain("Keep the queue ordered: no, reorders");
+    // Already scored runs aren't sent again.
+    expect(await judgeRuns(root, dir, { backend: fake })).toBe(0);
+    expect(benchReport(dir).text).toContain("ratings by fake-opus (a model shown only");
+    expect(redact("the textBox view", root)).toBe("the textBox view");
   });
 
   it("runs agents without deploy credentials", () => {
