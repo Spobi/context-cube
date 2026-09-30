@@ -65,6 +65,24 @@ describe("code links", () => {
     expect(commitsForKey([{ hash: "a", date: "", subject: "Tidepool 1.0.8 (10): other", files: [] }], "1.0.8 (1)")).toEqual([]);
   });
 
+  it("keeps a key from matching longer versions, and leaves the cube's own update commits out", () => {
+    const c = (hash: string, subject: string, files: string[]) => ({ hash, date: "2026-09-30", subject, files });
+    const commits = [
+      // Quickie: each "Update Context Cube to 0.3.x" landed on the entry keyed "0.3" (a call_quality.md section) and pushed a real commit out.
+      c("cube1", "Update Context Cube to 0.3.8", ["context-cube/.tool/cube.mjs", "context-cube/Y01-history/ROW.md", "context-cube/.state/boxes/Y01.X018.json"]),
+      c("cube2", "Update Context Cube to 0.3.4 and re-check 15 stale boxes", [".claude/rules/cube-Y02-X033.md", ".claude/settings.json", "context-cube/CUBE.md"]),
+      c("app1", "Go Dark: 250-coin spend inverts your video; 0.3.5", ["quickie-video/ios/Quickie/Calling/CallManager.swift"]),
+      c("app2", "Rename the Home tab; 0.3.4 (2)", ["quickie-video/ios/project.yml", "context-cube/Y01-history/ROW.md"]),
+      c("app3", "Polish for v0.3", ["quickie-video/HISTORY.md"]),
+    ];
+    const ids = (key: string) => commitsForKey(commits, key).map((x) => x.hash);
+    expect(ids("0.3")).toEqual(["app3"]);
+    expect(ids("0.3.4")).toEqual(["app2"]);
+    expect(ids("0.3.4 (2)")).toEqual(["app2"]);
+    expect(ids("0.3.5")).toEqual(["app1"]);
+    expect(ids("0.3.8")).toEqual([]);
+  });
+
   it("leaves agents' settings out of code search, and out of what a commit's update plan names", async () => {
     const root = tempProject({
       "src/camera.swift": "func requestPermissions() {}\n",

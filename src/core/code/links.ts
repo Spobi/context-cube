@@ -8,6 +8,7 @@ import { git, gitRoot } from "../git";
 import { loadBoxState, newBoxState, saveBoxState, type BoxState } from "../state/state";
 import { buildCodeIndex, declares, filesWithName, fingerprint, isPlainWord, lineWith, usesAsCode, type CodeIndex } from "./search";
 import { linkStrength } from "./governs";
+import { CUBE_DIR } from "../paths";
 import { FROM_RE } from "../build/place";
 
 /**
@@ -135,10 +136,23 @@ export function loadCommits(root: string, max = 5000): CommitRef[] {
     });
 }
 
+/**
+ * Files only the cube's own upkeep touches. A commit that changes nothing else
+ * (updating the tool, re-checking boxes) isn't the project's history, even when
+ * its message names a version: "Update Context Cube to 0.3.8" is not build 0.3.8.
+ */
+function isCubeUpkeep(c: CommitRef): boolean {
+  return c.files.length > 0 && c.files.every((f) => f.startsWith(`${CUBE_DIR}/`) || /^\.claude\/(rules\/cube-|agents\/cube-|settings(\.local)?\.json$)|^\.codex\/|^\.agents\/skills\/cube-/.test(f));
+}
+
+/**
+ * The commits whose message names this version, newest 10. The version must
+ * end where the key does: "0.3" is not "0.3.8", though "0.3.8" covers "0.3.8 (2)".
+ */
 export function commitsForKey(commits: CommitRef[], key: string): CommitRef[] {
   const esc = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s*");
-  const re = new RegExp(`(?<![\\d.])${esc}(?![\\d])`);
-  return commits.filter((c) => re.test(c.subject)).slice(0, 10);
+  const re = new RegExp(`(?<![\\d.])${esc}(?!\\d|\\.\\d)`);
+  return commits.filter((c) => re.test(c.subject) && !isCubeUpkeep(c)).slice(0, 10);
 }
 
 // ---------- apply to the cube ----------
