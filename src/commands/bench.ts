@@ -1,8 +1,10 @@
+import { join } from "node:path";
+import { readJson } from "../core/fsutil";
 import { findProjectRoot } from "../core/paths";
 import { CubeError } from "../core/ops";
 import { terminalAsker } from "../setup/ask";
-import { defaultTasksPath, loadTasks, writeStarter } from "../bench/tasks";
-import { runBench } from "../bench/run";
+import { defaultTasksPath, loadTasks, writeStarter, type TasksFile } from "../bench/tasks";
+import { runBench, runsLeft } from "../bench/run";
 import { latestResults, scoreRuns } from "../bench/score";
 import { benchReport } from "../bench/report";
 import { judgeRuns, unscoredRuns } from "../bench/judge";
@@ -14,16 +16,29 @@ export function benchInit(opts: { cwd?: string }): string[] {
   return [`Tasks file: ${path}`, "Edit it with your own tasks (at least 5: 2 simple, 2 complex, 1 that depends on an older incident), then run: cube bench run"];
 }
 
-export async function benchRun(opts: { cwd?: string; tasks?: string; only?: string[]; runs?: string; model?: string }): Promise<string[]> {
+export async function benchRun(opts: { cwd?: string; tasks?: string; only?: string[]; runs?: string; model?: string; resume?: boolean; results?: string }): Promise<string[]> {
   const root = findProjectRoot(opts.cwd);
-  const tasks = loadTasks(opts.tasks ?? defaultTasksPath(root));
-  const n = (opts.only?.length ? tasks.tasks.filter((t) => opts.only!.includes(t.id)).length : tasks.tasks.length) * Number(opts.runs ?? tasks.runs) * 2;
+  let resume: string | undefined;
+  let tasks: TasksFile | undefined;
+  if (opts.resume) {
+    resume = opts.results ?? latestResults(root);
+    if (!resume) throw new CubeError("No bench to continue yet. Start one with: cube bench run");
+    if (opts.runs || opts.model) throw new CubeError("--resume keeps the model and the number of runs the bench started with.");
+    try {
+      tasks = loadTasks(opts.tasks ?? defaultTasksPath(root)); // only for the allowed tools, in results from before 0.3.8
+    } catch {
+      tasks = undefined;
+    }
+  } else tasks = loadTasks(opts.tasks ?? defaultTasksPath(root));
+  const n = runsLeft(tasks, { only: opts.only, runs: opts.runs ? Number(opts.runs) : undefined, resume });
+  if (resume && n <= 0) return [`Every run in ${resume} is done. Score them: cube bench score --ai (or cube bench score to do it yourself)`];
+  const model = resume ? readJson<{ model: string }>(join(resume, "meta.json")).model : opts.model ?? tasks!.model;
   const ask = terminalAsker();
-  const ok = await ask.confirm(`This runs ${n} agent sessions (${opts.model ?? tasks.model}), one after another. It uses a lot of your plan's usage and can take hours. Go ahead?`, false);
+  const ok = await ask.confirm(`This runs ${n} agent session${n === 1 ? "" : "s"} (${model}), one after another${resume ? `, continuing ${resume}` : ""}. It uses a lot of your plan's usage and can take hours. Go ahead?`, false);
   if (!ok) return ["Not started."];
   try {
-    const r = await runBench(root, tasks, { only: opts.only, runs: opts.runs ? Number(opts.runs) : undefined, model: opts.model, say: (s) => console.log(s) });
-    return [`Done: ${r.records.length} runs in ${r.dir}`, "Score them blind: cube bench score"];
+    const r = await runBench(root, tasks, { only: opts.only, runs: opts.runs ? Number(opts.runs) : undefined, model: opts.model, resume, say: (s) => console.log(s) });
+    return [`Done: ${r.records.length} runs in ${r.dir}`, "Score them blind: cube bench score --ai (Opus) or cube bench score (you)"];
   } catch (err) {
     if (err instanceof UsageLimitError) return [err.message];
     throw err;

@@ -2,6 +2,10 @@
 
 To update a project, run `npx context-cube@latest` in it, then commit `context-cube/` so teammates get the same version.
 
+## 0.3.8 (2026-09-30)
+
+- **`cube bench run --resume` continues a bench a usage limit stopped.** It picks up the latest results folder (or `--results <dir>`) at the commit the bench started from, even if the project has moved on since. It keeps the same tasks, model, runs and `--only`, skips finished runs, and runs the stopped one again from a clean folder. Run it after each reset until it says every run is done. Before, `--only` started the task over in a new folder, and `score` and `report` read only the newest one.
+
 ## 0.3.7 (2026-09-30)
 
 - `cube ok` and `cube links` accept several box ids in one argument, separated by spaces, new lines or commas. In zsh an unquoted variable, as in `cube ok $ids`, arrives as a single argument, and the command used to fail with "No box Y00.X021 Y00.X022 …".

@@ -337,6 +337,8 @@ export function buildProgram(): Command {
     .option("--only <id>", "only this task (repeatable)", collect)
     .option("--runs <n>", "runs per task per copy")
     .option("--model <model>", "the main session's model")
+    .option("--resume", "continue the latest bench (after a usage limit, say): same commit and tasks, only the runs not done yet")
+    .option("--results <dir>", "with --resume, the results folder to continue (default: the latest)")
     .action(run((opts) => bench.benchRun(opts)));
   b.command("score")
     .description("Score each run blind, 1–5, without seeing which copy made it.")

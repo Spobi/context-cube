@@ -5,7 +5,9 @@ import { stringify } from "yaml";
 import { build } from "../../src/commands/build";
 import { scriptedAsker } from "../../src/setup/ask";
 import { prepareCopies, removeCopies } from "../../src/bench/copies";
-import { runBench } from "../../src/bench/run";
+import { loadRuns, runBench, runsLeft } from "../../src/bench/run";
+import { latestResults } from "../../src/bench/score";
+import { UsageLimitError } from "../../src/ai/runner";
 import { benchReport } from "../../src/bench/report";
 import { loadTasks } from "../../src/bench/tasks";
 import { cleanEnv } from "../../src/bench/run";
@@ -103,6 +105,53 @@ echo '{"type":"result","subtype":"success","is_error":false,"result":"done","ses
       expect(rep.text).toContain("| files | 2 of 2 (100%) | 0 of 2 (0%) |");
       expect(rep.text).toContain("| cube | 0 of 2 (0%) | 0 of 2 (0%) |");
       expect(rep.text).not.toMatch(/saving/i);
+    } finally {
+      delete process.env.CUBE_CLAUDE_BIN;
+    }
+  });
+
+  it("resumes after a usage limit: same commit, only the missing runs, the stopped one again", async () => {
+    const root = await builtProject();
+    const dir = tempProject({}, { git: false });
+    const fake = join(dir, "claude");
+    const count = join(dir, "count");
+    // A stand-in agent that hits a usage limit on its third session.
+    writeFileSync(
+      fake,
+      `#!/bin/sh
+n=$(($(cat "${count}" 2>/dev/null || echo 0) + 1)); echo $n > "${count}"
+echo "// run $n" >> src/sync/queue.ts
+if [ "$n" = 3 ] && [ ! -f "${count}.resumed" ]; then echo '{"type":"result","subtype":"success","is_error":true,"result":"You\\u2019ve hit your session limit \\u00b7 resets 6:20pm","session_id":"s'$n'"}'; exit 1; fi
+echo '{"type":"result","subtype":"success","is_error":false,"result":"done","session_id":"s'$n'","total_cost_usd":0.1,"num_turns":2,"usage":{"input_tokens":10,"output_tokens":5}}'
+`,
+    );
+    chmodSync(fake, 0o755);
+    process.env.CUBE_CLAUDE_BIN = fake;
+    const tasksPath = join(dir, "tasks.yaml");
+    writeFileSync(tasksPath, stringify({ model: "haiku", runs: 2, allow: ["Bash(git log:*)"], tasks: [{ id: "one", size: "simple", prompt: "Do one." }, { id: "two", size: "simple", prompt: "Do two." }] }));
+    try {
+      const err = await runBench(root, loadTasks(tasksPath), { only: ["one"] }).catch((e) => e);
+      expect(err).toBeInstanceOf(UsageLimitError);
+      expect(err.message).toContain("2 of 4 runs done");
+      expect(err.message).toContain("cube bench run --resume");
+      const results = latestResults(root)!;
+      expect(loadRuns(results)).toHaveLength(3);
+      // The project moves on; the resumed bench stays on the commit it started from.
+      const base = JSON.parse(readFileSync(join(results, "meta.json"), "utf8")).base;
+      writeFileSync(join(root, "LATER.md"), "later\n");
+      commitAll(root, "later work");
+      writeFileSync(`${count}.resumed`, "");
+      expect(runsLeft(undefined, { resume: results })).toBe(2);
+      const r = await runBench(root, undefined, { resume: results });
+      expect(r.dir).toBe(results);
+      const all = loadRuns(results);
+      expect(all.map((x) => x.id).sort()).toEqual(["one.cube.1", "one.cube.2", "one.files.1", "one.files.2"]);
+      expect(all.every((x) => x.ok)).toBe(true);
+      const meta = JSON.parse(readFileSync(join(results, "meta.json"), "utf8"));
+      expect(meta).toMatchObject({ base, only: ["one"], allow: ["Bash(git log:*)"] });
+      expect(all.every((x) => !x.changedFiles.includes("LATER.md"))).toBe(true);
+      expect(Number(readFileSync(count, "utf8"))).toBe(5);
+      expect(runsLeft(undefined, { resume: results })).toBe(0);
     } finally {
       delete process.env.CUBE_CLAUDE_BIN;
     }
