@@ -157,6 +157,32 @@ echo '{"type":"result","subtype":"success","is_error":false,"result":"done","ses
     }
   });
 
+  it("runs the prepare command in each copy before every run, and stops if it fails", async () => {
+    const root = await builtProject();
+    const dir = tempProject({}, { git: false });
+    const fake = join(dir, "claude");
+    // A stand-in agent that fails unless the prepared file is there, then deletes it (a reset alone wouldn't bring it back if ignored).
+    writeFileSync(
+      fake,
+      `#!/bin/sh
+if [ -f PREP.txt ]; then rm PREP.txt; echo '{"type":"result","subtype":"success","is_error":false,"result":"done","session_id":"p'$$'","usage":{}}'; else echo '{"type":"result","subtype":"success","is_error":true,"result":"no PREP.txt","session_id":"p'$$'"}'; fi
+`,
+    );
+    chmodSync(fake, 0o755);
+    process.env.CUBE_CLAUDE_BIN = fake;
+    const tasksPath = join(dir, "tasks.yaml");
+    try {
+      writeFileSync(tasksPath, stringify({ runs: 2, prepare: "echo ready > PREP.txt", tasks: [{ id: "one", size: "simple", prompt: "Do one." }] }));
+      const r = await runBench(root, loadTasks(tasksPath));
+      expect(r.records.map((x) => x.ok)).toEqual([true, true, true, true]);
+      expect(JSON.parse(readFileSync(join(r.dir, "meta.json"), "utf8")).prepare).toBe("echo ready > PREP.txt");
+      writeFileSync(tasksPath, stringify({ runs: 1, prepare: "exit 3", tasks: [{ id: "one", size: "simple", prompt: "Do one." }] }));
+      await expect(runBench(root, loadTasks(tasksPath))).rejects.toThrow(/prepare command failed in the files copy \(exit 3\)/);
+    } finally {
+      delete process.env.CUBE_CLAUDE_BIN;
+    }
+  });
+
   it("lets a model score runs blind: no cube or memory edits, ids, or copy folders reach it", async () => {
     const root = await builtProject();
     const dir = join(tempProject({}, { git: false }), "results");

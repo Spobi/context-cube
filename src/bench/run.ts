@@ -136,6 +136,8 @@ interface BenchMeta {
   allow?: string[];
   /** The tasks this bench covers, when it was started with --only. */
   only?: string[];
+  /** Run in each copy before every run (older results folders don't have it). */
+  prepare?: string;
 }
 
 /** A run stopped by a usage limit isn't a result; resuming runs it again. */
@@ -151,13 +153,14 @@ export async function runBench(root: string, tasks: TasksFile | undefined, opts:
     meta = readJson<BenchMeta>(join(outDir, "meta.json"));
     if (opts.only?.length) meta.only = opts.only;
     meta.allow ??= tasks?.allow ?? [];
+    if (!("prepare" in meta)) meta.prepare = tasks?.prepare;
     kept = loadRuns(outDir).filter((r) => !stoppedByLimit(r));
     writeText(join(outDir, "runs.jsonl"), kept.map((r) => `${JSON.stringify(r)}\n`).join(""));
   } else {
     if (!tasks) throw new Error("No tasks to run.");
     const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
     outDir = join(benchDir(root), "results", stamp);
-    meta = { base: git(["rev-parse", "HEAD"], root).stdout.trim(), model: opts.model ?? tasks.model, runs: opts.runs ?? tasks.runs, started: new Date().toISOString(), tasks: tasks.tasks, allow: tasks.allow, only: opts.only?.length ? opts.only : undefined };
+    meta = { base: git(["rev-parse", "HEAD"], root).stdout.trim(), model: opts.model ?? tasks.model, runs: opts.runs ?? tasks.runs, started: new Date().toISOString(), tasks: tasks.tasks, allow: tasks.allow, prepare: tasks.prepare, only: opts.only?.length ? opts.only : undefined };
   }
   // Resuming uses the commit the bench started from, even if the project has moved on.
   const copies: Copies = prepareCopies(root, meta.base);
@@ -180,7 +183,7 @@ export async function runBench(root: string, tasks: TasksFile | undefined, opts:
         done++;
         if (finished.has(`${task.id}.${copy}.${n}`)) continue;
         say(`[${done}/${total}] ${task.id}, ${copy} copy, run ${n}`);
-        const rec = await runOne(copies, task, copy, n, model, meta.allow ?? [], outDir, opts.timeoutMs ?? 30 * 60_000, required.get(task.id) ?? []);
+        const rec = await runOne(copies, task, copy, n, model, meta.allow ?? [], meta.prepare, outDir, opts.timeoutMs ?? 30 * 60_000, required.get(task.id) ?? []);
         records.push(rec);
         appendLine(join(outDir, "runs.jsonl"), JSON.stringify(rec));
         if (stoppedByLimit(rec)) {
@@ -206,9 +209,13 @@ export function runsLeft(tasks: TasksFile | undefined, opts: Pick<BenchOptions, 
   return tasks.tasks.filter((t) => !opts.only?.length || opts.only.includes(t.id)).length * (opts.runs ?? tasks.runs) * 2;
 }
 
-async function runOne(copies: Copies, task: Task, copy: CopyName, n: number, model: string, allowAll: string[], outDir: string, timeoutMs: number, required: Required[]): Promise<RunRecord> {
+async function runOne(copies: Copies, task: Task, copy: CopyName, n: number, model: string, allowAll: string[], prepare: string | undefined, outDir: string, timeoutMs: number, required: Required[]): Promise<RunRecord> {
   const c = copies[copy];
   resetCopy(c.path, c.prep);
+  if (prepare) {
+    const p = spawnSync("sh", ["-c", prepare], { cwd: c.path, encoding: "utf8", env: cleanEnv(), timeout: 10 * 60_000 });
+    if (p.status !== 0) throw new Error(`The prepare command failed in the ${copy} copy (exit ${p.status}), so the runs would not be comparable: ${prepare}\n${((p.stderr ?? "") + (p.stdout ?? "")).slice(-1500)}`);
+  }
   const id = `${task.id}.${copy}.${n}`;
   const dir = join(outDir, task.id, `${copy}-${n}`);
   remove(dir); // a resumed run starts clean, without files left by the attempt a limit stopped

@@ -28,6 +28,12 @@ export const TasksFileSchema = z.object({
   model: z.string().default("sonnet"),
   runs: z.number().int().min(1).max(10).default(3),
   allow: z.array(z.string()).default([]),
+  /**
+   * A shell command run in each copy before every run, after the reset: for
+   * files git doesn't track that the project needs to build (a secrets file
+   * from its example, say). If it fails, the bench stops.
+   */
+  prepare: z.string().optional(),
   tasks: z.array(TaskSchema).min(1),
 });
 export type TasksFile = z.infer<typeof TasksFileSchema>;
@@ -61,6 +67,7 @@ runs: 3              # runs per task per copy
 allow:               # tools every run may use without asking (plus Read, Edit, Write, Grep, Glob)
   - "Bash(git status:*)"
   - "Bash(git diff:*)"
+# prepare: "cp config/secrets.example config/secrets"   # runs in each copy before every run, for untracked files the build needs
 tasks:
   - id: simple-example
     size: simple

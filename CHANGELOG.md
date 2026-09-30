@@ -2,6 +2,10 @@
 
 To update a project, run `npx context-cube@latest` in it, then commit `context-cube/` so teammates get the same version.
 
+## 0.3.9 (2026-09-30)
+
+- **`prepare:` in the bench's tasks file** runs a shell command in each copy before every run, after the reset. It's for files git doesn't track that the project needs to build. The copies are git worktrees, so they don't have them. On Quickie, the Xcode project loads the gitignored `Secrets.xcconfig`, so without it every build and every check failed in both copies. `prepare: "cp …/Secrets.example.xcconfig …/Secrets.xcconfig"` fixes it. If the command fails, the bench stops rather than recording runs that can't be compared.
+
 ## 0.3.8 (2026-09-30)
 
 - **`cube bench run --resume` continues a bench a usage limit stopped.** It picks up the latest results folder (or `--results <dir>`) at the commit the bench started from, even if the project has moved on since. It keeps the same tasks, model, runs and `--only`, skips finished runs, and runs the stopped one again from a clean folder. Run it after each reset until it says every run is done. Before, `--only` started the task over in a new folder, and `score` and `report` read only the newest one.
