@@ -21,6 +21,15 @@ export function parseId(id: string): Coord | undefined {
   return c;
 }
 
+/**
+ * Box ids given on the command line, one per argument or several in one:
+ * zsh passes an unquoted variable as a single argument, so
+ * `cube ok $(cube status)` arrives as one string of ids.
+ */
+export function splitIds(args: string[]): string[] {
+  return args.flatMap((a) => a.split(/[\s,]+/)).filter(Boolean);
+}
+
 export function isId(s: string): boolean {
   return parseId(s) !== undefined;
 }

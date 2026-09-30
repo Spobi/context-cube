@@ -2,6 +2,10 @@
 
 To update a project, run `npx context-cube@latest` in it, then commit `context-cube/` so teammates get the same version.
 
+## 0.3.7 (2026-09-30)
+
+- `cube ok` and `cube links` accept several box ids in one argument, separated by spaces, new lines or commas. In zsh an unquoted variable, as in `cube ok $ids`, arrives as a single argument, and the command used to fail with "No box Y00.X021 Y00.X022 …".
+
 ## 0.3.6 (2026-09-30)
 
 - **Opus can score the bench.** `cube bench score --ai` has Opus score each run instead of you, one call per run, in shuffled order. It sees the task, the full text of each rule the task must keep, the code changes (with 25 lines of context around each), the agent's last message, and the test result. It never sees which copy made the change. Edits to the cube, memory files and agent settings are left out of the diff. Box ids, cube paths, memory file names, section marks and the copies' folder names are replaced in everything it reads. It gives the same scores a person would, including a yes/no per rule with a reason, and the report says who scored. Scores are saved as they arrive, so after a usage limit, run it again to finish.

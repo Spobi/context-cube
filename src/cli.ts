@@ -12,6 +12,7 @@ import { setup } from "./setup/setup";
 import * as bench from "./commands/bench";
 import { archiveCmd, restoreCmd } from "./commands/archive";
 import { mergeFile } from "./core/merge";
+import { splitIds } from "./core/format/ids";
 
 function run(fn: (...args: any[]) => unknown | Promise<unknown>) {
   return async (...args: any[]) => {
@@ -284,12 +285,12 @@ export function buildProgram(): Command {
   program
     .command("ok <ids...>")
     .description("Mark boxes as checked: refresh their code links and fingerprints and set them back to ok.")
-    .action(run((ids, opts) => ok(ids, opts)));
+    .action(run((ids, opts) => ok(splitIds(ids), opts)));
 
   program
     .command("links [ids...]")
     .description("Re-link boxes to the code they mention (all boxes if none given).")
-    .action(run((ids, opts) => links(ids ?? [], opts)));
+    .action(run((ids, opts) => links(splitIds(ids ?? []), opts)));
 
   const config = program.command("config").description("Read or change settings (cube.config.json).");
   config

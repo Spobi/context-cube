@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boxId, formatCoord, idKey, parseId, widthFor } from "../../src/core/format/ids";
+import { boxId, formatCoord, idKey, parseId, splitIds, widthFor } from "../../src/core/format/ids";
 import { isValidName, slugify } from "../../src/core/format/names";
 import { parseDoc, renderDoc, type Header } from "../../src/core/format/header";
 import { joinGenerated, splitGenerated } from "../../src/core/format/generated";
@@ -7,6 +7,10 @@ import { findInlineRefs, rewriteInlineRefs } from "../../src/core/format/links";
 import { removeBlock, upsertBlock, blockSeparator, extractBlock } from "../../src/core/index/block";
 
 describe("ids", () => {
+  it("splits ids that arrive joined in one argument (an unquoted zsh variable)", () => {
+    expect(splitIds(["Y00.X021 Y00.X022\nY00.X023", "Y02.X001,Y02.X002", " "])).toEqual(["Y00.X021", "Y00.X022", "Y00.X023", "Y02.X001", "Y02.X002"]);
+  });
+
   it("parses rows, boxes, and drawers", () => {
     expect(parseId("Y05")).toEqual({ row: 5 });
     expect(parseId("Y05.X003")).toEqual({ row: 5, box: 3 });
